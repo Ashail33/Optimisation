@@ -1,0 +1,156 @@
+# import libraries
+import numpy as np
+import pandas as pd
+################################################################################################################
+# Function -> Obj_Fn
+################################################################################################################
+#Creating a function to evaluate the value of the objective function
+#Input the solution to be evaluated and the coefficients for the objective function
+#Output is the objective value of the solution
+################################################################################################################
+def Obj_Fn (solution,fn_coeff=[8,12,9,14,16,10,6,7,11,13]):
+    #intialise the z value
+    z=0
+    
+    #add the values one by one by multplying each element in the solution 
+    #by it's corresponding coeffiencient in the objective function
+    for i in range(0,len(fn_coeff)):
+        z+= fn_coeff[i]*solution[i]
+    return(z)
+################################################################################################################
+
+
+################################################################################################################
+#Function -> Constraints_met
+################################################################################################################
+#creating a function to evaluate if the solution is feasible or not
+#Input is the solution for evaluation, the coefficients for the constraints
+    #equation as well as the right hand side value of the inequality
+#Output is a binary indicator as to whether the solution is feasible -> 1 means feasible , 0 means infeasible
+################################################################################################################
+
+def Constraints_met(solution,fn_coeff=[3,2,1,4,3,3,1,2,2,5],ineq=12):
+    # intialise the evaluation of the left side of the constraint formula
+    z=0
+    
+    #for each element in the solution multiply by corresponding coefficient in the constraints equation
+    for i in range(0,len(fn_coeff)):
+        z+= fn_coeff[i]*solution[i]
+    # Evaluate if the constraint is met or not
+    if z <= ineq:
+        constraints_met_bool = 1 # will indicate that the constraint is met and the solution is feasible
+    else :
+        constraints_met_bool = 0 # will indicate that the constraint is not met and the solution is infeasible
+    return(constraints_met_bool)
+################################################################################################################
+
+
+################################################################################################################
+#Function -> single_bit_complement
+################################################################################################################
+#Creates a function for creating the set of neighbouring solutions
+#Input is the solution that you are looking for neighbours for
+#Output is a list of all the neighbours
+################################################################################################################
+def single_bit_complement(solution):
+    neighbours= [] # initialise the neighbours set
+    
+    for i in range(0,len(solution)):
+        # create a deep copy of the input solution,this is done to keep the input solution for complementing
+        soln_copy=solution.copy() 
+        
+        #logic used to complement the bits , if 1 then make 0 and vice versa
+        if solution[i]==0:
+            soln_copy[i]=1
+        else :
+            soln_copy[i]=0
+            
+        #add the solution to the neighbours set
+        neighbours.append(soln_copy)
+    return(neighbours) 
+################################################################################################################
+
+
+################################################################################################################
+#Function -> choose_next_neighbour
+################################################################################################################
+#function for choosing the next neighbour using the method of best improvement
+#Input is a data frame with the headings: Iteration	S(t)	Z	Neighbour	New_z	Feasible
+    #this is the table of evaluation of all the neighbours
+#Outputs the best neighbour and the corresponding z value in a list
+################################################################################################################
+
+def choose_next_neighbour(results_table):
+    #Filter the infeasible results out and then record the neighbour with the max Z
+    best_neighbour=results_table['Neighbour'][results_table['New_z'][results_table['Feasible']==1].idxmax(axis=0, 
+                                                                                                          skipna=True)]
+    
+    #Filter the infeasible results out and then record the max Z
+    best_neighbour_z=results_table['New_z'][results_table['New_z'][results_table['Feasible']==1].idxmax(axis=0, 
+                                                                                                        skipna=True)]
+    
+    return([best_neighbour,best_neighbour_z])
+################################################################################################################
+
+
+################################################################################################################
+#Function -> local_search
+################################################################################################################
+# A function for local search with the iput being the initial solution ( Starting solution)
+# The function takes the input in  the form of a 10x1 array 
+# If a vlue for the input is left out it will automatically use  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+################################################################################################################
+
+def local_search(s=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]):
+    
+    #Initialise global variables in the local search
+    end=0
+    i_count=0
+    
+    #create a table for recording all history
+    Final_table= pd.DataFrame()
+
+    while end ==0:
+        
+        z= Obj_Fn (s) #Evaluate the objective function for the solution
+        neighbours=single_bit_complement(s) # Create a list of the neighbours using single bit complement moves
+        
+        # local variable initialsisation for the an iteration, these are used for recording the evaluations 
+        # to populate the end table
+        
+        feasible_eval= []
+        z_eval= []
+        z_curr=[]
+        iteration=[]
+        starting_soln_for_iteration=[]
+        
+        # loop through all of the neighbours and evaluate if they are feasible and what their objective value is
+        # and then records them into a table
+        for i in neighbours:
+        
+            z_eval.append(Obj_Fn (i)) # Calls the function for evaluation of objective function
+            feasible_eval.append(Constraints_met(i)) # Calls the function for checking constraints and appends to the list
+            iteration.append(i_count) # appends the iteration to list
+            starting_soln_for_iteration.append(s) # appends the starting solution of the iteration to the list
+            z_curr.append(z) # appends the starting solutions' objective value of the iteration to the list
+        
+        #Creates a structured table that is easy to query, by combining the above lists
+        temp_table=pd.DataFrame(list(zip(iteration,starting_soln_for_iteration,z_curr,neighbours,z_eval,feasible_eval)),
+                                columns=['Iteration','S(t)','Z','Neighbour','New_z','Feasible'])
+        
+        #Increment the iteration
+        i_count+=1
+        
+        # Add the current iteration table to the table with all the history
+        Final_table = pd.concat([Final_table,temp_table])
+        
+        
+        # Calls the function to choose the most improving neighbour 
+        # if the new neighbours solution is better than the previous then update the solution 
+        # else end the search
+        if z < choose_next_neighbour(temp_table)[1]:
+            s= choose_next_neighbour(temp_table)[0]
+        else:
+            end=1
+    return(Final_table,s,z)
+################################################################################################################
