@@ -1,0 +1,329 @@
+# Import libaries
+import pandas as pd
+import random
+import numpy as np
+import math
+from copy import deepcopy
+
+################################################################################################################
+#Function -> soln_init
+################################################################################################################
+# A function for creating a list of initial particles
+# Inputs:
+    # 1) range_list - range of the decision variables
+    # 2) min_list - min value of decision variables
+    # 3) n_particles -  number of particles to create
+    # 4) precision -  the number of decimals the initial solution should have
+# Outputs the initial solutions/particles
+################################################################################################################
+
+def soln_init(range_list,min_list,n_particles,precision=2):
+    x_i=[] # creates an empty list
+    for i in range(0,n_particles): # for each particle, create a starting solution
+        sol_set=[] # creates an empty list
+        for i in range(0,len(range_list)): # for each particle get it's range
+            # adds the range * a random number to the minimum value for 
+            # the decision variable in the particle
+            sol_set.append(min_list[i]+round(range_list[i]*random.random(),precision))
+        x_i.append(sol_set) #append to the final list
+    return(x_i)
+################################################################################################################
+
+################################################################################################################
+#Function -> obj_fns
+################################################################################################################
+# A function for evaluating the objective value for a solution
+# Inputs:
+    # 1) solution
+# Outputs the objective value
+################################################################################################################
+
+def obj_fns(soln):
+    x=soln[0] # getting the x component of the solution
+    y=soln[1] # getting the y component of the solution
+    # evaluate the cost function given
+    z= -(y+47)* math.sin(abs(y+(x/2)+47)**0.5)-x*math.sin(abs(x-(y+47))**0.5)
+#     print(x)
+#     print(y)
+    return(z)
+################################################################################################################
+
+################################################################################################################
+#Function -> feasible_check
+################################################################################################################
+# A function for evaluating if a solution is feasible
+# Inputs:
+    # 1) solution
+    # 2) range_list - range of the decision variables
+    # 3) min_list - min value of decision variables
+# Outputs a boolean value to state if the solution is feasible
+################################################################################################################
+
+def feasible_check(soln,min_list,range_list):
+    value=True # default value set to False
+    # checks if the solution is within bounds for both variables
+    for i in range(0,len(min_list)):
+        if soln[i]<min_list[i] or soln[i]>min_list[i]+range_list[i]:
+            value=False
+    return(value)
+################################################################################################################   
+
+################################################################################################################
+#Function -> PSO_function - using gbest method
+################################################################################################################
+# A function for evaluating if a solution is feasible
+# Inputs:
+    # 1) C_1
+    # 2) C_2
+    # 3) w
+    # 4) n_particles - number of particles to use in the swarm
+    # 5) n_termination - number of non improving moves in the global optimal 
+    #                    threshold for termination
+    # 6) obj_fns - objective function function to be used in evaluating the solution
+    # 7) range_list -range of the decision variables
+    # 8) min_list - min value of decision variables
+    # 9) precision  -  the number of decimals the initial solution should have
+    
+# Outputs the globally best solution and the best solution reached by each particle
+################################################################################################################
+
+
+def PSO_function(c_1,c_2,w,n_particles,n_termination,obj_fns,range_list,min_list,precision):
+    #Initialisation
+    # initialise the X postions of the particles
+    X_i=soln_init(range_list,min_list,n_particles,precision=2)
+    # incumbent soln for each particle since starting is set to the only solution 
+    p_i=deepcopy(X_i) 
+    t=0 # epoch set to 0
+
+    # Evaluate the fitness
+     # applies the objective function to each of the particles
+    z_vals=[obj_fns(x) for x in X_i] 
+    # best objective value is chosen
+    p_g=deepcopy(X_i[[i for i in range(0,len(z_vals)) if z_vals[i]==min(z_vals)][0]]) # incumbent soln for swarm
+    
+    # initialise the velocity vector for each particle to 0
+    v= np.zeros([len(p_i),len(p_i[0])])
+     # variable used to track how many iterations of non improvement  of the global optimal
+    count_since_last_update=0  # initialise variable to 0
+
+    while count_since_last_update<n_termination: # termination condition set
+        for i in range(0,len(p_i)): # for each particle
+            for j in range(0,len(p_i[0])): # for each decision variable
+                # calculate the velocity vector 
+                v[i][j]=w*v[i][j]+random.random()*c_1*(p_i[i][j]-X_i[i][j]) +random.random()*c_2*(p_g[j])
+                # calculate the new position of the particle in respect of the chosen decision variable
+                X_i[i][j]=X_i[i][j]+v[i][j]
+            
+            # if new position is better than the current best particle then update particle
+            if feasible_check(X_i[i],min_list,range_list): 
+                if obj_fns(X_i[i])< obj_fns(p_i[i]) :
+                    for j in range(0,len(p_i[i])):
+                        p_i[i][j]=X_i[i][j] # update the value
+                
+            # if new position is better than the current best globally then update global
+            if feasible_check(X_i[i],min_list,range_list): 
+                if obj_fns(X_i[i])< obj_fns(p_g) :
+                    for j in range(0,len(p_g)):
+                        p_g[j]=X_i[i][j] # update the value
+                    # set the number of iterations without improvement to 0
+                    count_since_last_update=0  
+                else:
+                    count_since_last_update+=1 # increment the number of iterations
+            else:
+                count_since_last_update+=1 # increment the number of iterations
+        t+=1 # increment the epoch
+    return(p_g,p_i) 
+################################################################################################################
+
+################################################################################################################
+#Function -> obj_fns_deep
+################################################################################################################
+# A function for evaluating a solutions objective function when nesting 
+# the low level in the high level PSO
+# Inputs:
+    # 1) solution
+# Outputs the fitness value of the incumbent solutions' objective value
+# using the current parameters C1, C2 and w
+################################################################################################################
+
+def obj_fns_deep(soln):
+    # the input soln is the C1, C2 and w value to be used for the low level PSO
+    # This calls the low level PSO, gets the ouput of the low level PSO - incumbent solution (soln_deep)
+    # and it's best moves for each particle
+    soln_deep,p_i=PSO_function(soln[0],soln[1],soln[2],50,n_termination,obj_fns,range_list,min_list,5)
+    # extract the x and y values from the list
+    x=soln_deep[0]
+    y=soln_deep[1]
+    # evaluate the objective function
+    z= -(y+27)* math.sin(abs(y+(x/2)+47)**0.5)-x*math.sin(abs(x-(y+47))**0.5)
+    return(z) 
+################################################################################################################
+
+# import libraries
+import numpy as np
+import pandas as pd
+################################################################################################################
+# Function -> Obj_Fn
+################################################################################################################
+#Creating a function to evaluate the value of the objective function
+#Input the solution to be evaluated and the coefficients for the objective function
+#Output is the objective value of the solution
+################################################################################################################
+def Obj_Fn (soln):
+    x=soln[0]
+    y=soln[1]
+    z= -(y+27)* math.sin(abs(y+(x/2)+47)**0.5)-x*math.sin(abs(x-(y+47))**0.5)
+    return(z)
+################################################################################################################
+
+
+################################################################################################################
+#Function -> Constraints_met
+################################################################################################################
+#creating a function to evaluate if the solution is feasible or not
+#Input is the solution for evaluation, the coefficients for the constraints
+    #equation as well as the right hand side value of the inequality
+#Output is a binary indicator as to whether the solution is feasible -> 1 means feasible , 0 means infeasible
+################################################################################################################
+
+def Constraints_met(soln,min_list=[-512,-512],range_list=[1024,1024]):
+    # intialise the evaluation of the left side of the constraint formula
+    value=0
+    if soln[0]>min_list[0] and soln[0]<min_list[0]+range_list[0] and soln[1]>min_list[1] and soln[1]<min_list[1]+range_list[1]:
+        value=1
+    
+    return(value)
+################################################################################################################
+
+
+################################################################################################################
+#Function -> single_bit_complement
+################################################################################################################
+#Creates a function for creating the set of neighbouring solutions
+#Input is the solution that you are looking for neighbours for
+#Output is a list of all the neighbours
+################################################################################################################
+def single_bit_complement(solution,stepsize=0.01):
+    neighbours=[]
+    from copy import deepcopy
+    for i in range(0,len(solution)):
+        for j in [-1*stepsize,stepsize]:
+            solution_copy=deepcopy(solution)
+            solution_copy[i]+=j
+            neighbours.append(solution_copy)
+    return(neighbours) 
+################################################################################################################
+
+
+################################################################################################################
+#Function -> choose_next_neighbour
+################################################################################################################
+#function for choosing the next neighbour using the method of best improvement
+#Input is a data frame with the headings: Iteration	S(t)	Z	Neighbour	New_z	Feasible
+    #this is the table of evaluation of all the neighbours
+#Outputs the best neighbour and the corresponding z value in a list
+################################################################################################################
+
+def choose_next_neighbour(results_table):
+    #Filter the infeasible results out and then record the neighbour with the max Z
+    best_neighbour=results_table['Neighbour'][results_table['New_z'][results_table['Feasible']==1].idxmin(axis=0, 
+                                                                                                          skipna=True)]
+    
+    #Filter the infeasible results out and then record the max Z
+    best_neighbour_z=results_table['New_z'][results_table['New_z'][results_table['Feasible']==1].idxmin(axis=0, 
+                                                                                                        skipna=True)]
+    
+    return([best_neighbour,best_neighbour_z])
+################################################################################################################
+
+
+################################################################################################################
+#Function -> local_search
+################################################################################################################
+# A function for local search with the iput being the initial solution ( Starting solution)
+# The function takes the input in  the form of a 10x1 array 
+# If a vlue for the input is left out it will automatically use  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+################################################################################################################
+
+def local_search(s,stepsize=1):
+    
+    #Initialise global variables in the local search
+    end=0
+    i_count=0
+    
+    #create a table for recording all history
+    Final_table= pd.DataFrame()
+
+    while end ==0:
+        
+        z= Obj_Fn(s) #Evaluate the objective function for the solution
+        neighbours=single_bit_complement(s,stepsize) # Create a list of the neighbours using single bit complement moves
+        
+        # local variable initialsisation for the an iteration, these are used for recording the evaluations 
+        # to populate the end table
+        
+        feasible_eval= []
+        z_eval= []
+        z_curr=[]
+        iteration=[]
+        starting_soln_for_iteration=[]
+        
+        # loop through all of the neighbours and evaluate if they are feasible and what their objective value is
+        # and then records them into a table
+        for i in neighbours:
+        
+            z_eval.append(Obj_Fn (i)) # Calls the function for evaluation of objective function
+            feasible_eval.append(Constraints_met(i)) # Calls the function for checking constraints and appends to the list
+            iteration.append(i_count) # appends the iteration to list
+            starting_soln_for_iteration.append(s) # appends the starting solution of the iteration to the list
+            z_curr.append(z) # appends the starting solutions' objective value of the iteration to the list
+        
+        #Creates a structured table that is easy to query, by combining the above lists
+        temp_table=pd.DataFrame(list(zip(iteration,starting_soln_for_iteration,z_curr,neighbours,z_eval,feasible_eval)),
+                                columns=['Iteration','S(t)','Z','Neighbour','New_z','Feasible'])
+        
+        #Increment the iteration
+        i_count+=1
+        
+        # Add the current iteration table to the table with all the history
+        Final_table = pd.concat([Final_table,temp_table])
+        
+        
+        # Calls the function to choose the most improving neighbour 
+        # if the new neighbours solution is better than the previous then update the solution 
+        # else end the search
+        if z > choose_next_neighbour(temp_table)[1]:
+            s= choose_next_neighbour(temp_table)[0]
+        else:
+            end=1
+    return(s,z)
+################################################################################################################
+
+
+################################################################################################################
+################################################################################################################
+################################################################################################################
+# use of the functions starts here
+################################################################################################################
+################################################################################################################
+################################################################################################################
+
+#Inputs
+n_termination=2000 # set to 70 as run time grows large with higher values
+range_list=[1024,1024]
+min_list=[-512,-512]
+soln=PSO_function(1,1,1,10,n_termination,obj_fns_deep,[3,3,1],[0,0,0],2)
+options=soln[1]
+soln=soln[0]
+
+# change the n_termination to 50000 for the low level PSO (less computationally expensive)
+# zz is the list of lists containing p_g and p_i
+zz=PSO_function(soln[0],soln[1],soln[2],50,50000,obj_fns,range_list,min_list,2) 
+
+# calculate the objective value for each solution in P_i
+zz_z=[obj_fns(x) for x in zz[1]] 
+
+# extract the x and y values for each solution in P_i
+x=[x[0] for x in zz[1]]
+y=[x[1] for x in zz[1]]
