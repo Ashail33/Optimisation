@@ -18,6 +18,10 @@ Highlights
 from __future__ import annotations
 
 import random
+
+# Small value added to fitness denominators to prevent division by zero when a
+# solution has a fitness of exactly 0.
+_FITNESS_EPSILON = 1e-12
 from copy import deepcopy
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
@@ -372,7 +376,7 @@ class GeneticOptimiser(BaseOptimiser):
             n -= 1
 
         # Convert minimisation fitness to selection weights
-        inv_fitness = [1.0 / (f + 1e-12) for f in fitness]
+        inv_fitness = [1.0 / (f + _FITNESS_EPSILON) for f in fitness]
         total = sum(inv_fitness)
         weights = [v / total for v in inv_fitness]
 

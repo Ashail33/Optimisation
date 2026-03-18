@@ -646,42 +646,41 @@ class DBMOSAOptimiser(BaseOptimiser):
     ) -> float:
         """Modify ΔE using the selected diversity method."""
         method = self.diversity_method
+        # Pre-compute objective values for all archive members once to avoid
+        # redundant evaluations inside the per-method logic below.
+        archive_z = [obj_fn(s) for s in archive]
+        z_new = obj_fn(x_new)
+
         if method == "Kernel":
             sigma = 0.001
-            z_new = obj_fn(x_new)
             dist_sum = sum(
-                max(0.0, 1 - abs(z_new[0] - obj_fn(s)[0]) / sigma)
-                for s in archive
-                if abs(z_new[0] - obj_fn(s)[0]) < sigma
+                max(0.0, 1 - abs(z_new[0] - az[0]) / sigma)
+                for az in archive_z
+                if abs(z_new[0] - az[0]) < sigma
             )
             if dist_sum > 0:
                 delta_e /= dist_sum
 
         elif method == "Histogram":
-            z_new = obj_fn(x_new)
-            archive_z = [obj_fn(s) for s in archive]
             # Count solutions in the same histogram cell (resolution 0.1)
             cell = tuple(round(v, 1) for v in z_new)
             count = sum(
-                1 for z in archive_z if tuple(round(v, 1) for v in z) == cell
+                1 for az in archive_z if tuple(round(v, 1) for v in az) == cell
             )
             if count > self.diversity_threshold:
                 delta_e = 1e9 * T
 
         elif method == "NN":
             # Nearest-neighbour crowding: penalise if already worst-ranked
-            archive_z = [obj_fn(s) for s in archive]
-            z_new = obj_fn(x_new)
             all_z = archive_z + [z_new]
-            n = len(all_z)
-            if n >= 3:
+            if len(all_z) >= 3:
                 # Simple 1-NN distance for each point
                 distances = []
-                for zi in all_z:
+                for i, zi in enumerate(all_z):
                     dists = [
                         sum((a - b) ** 2 for a, b in zip(zi, zj)) ** 0.5
-                        for zj in all_z
-                        if zj is not zi
+                        for j, zj in enumerate(all_z)
+                        if j != i
                     ]
                     distances.append(min(dists))
                 # If x_new has the smallest nearest-neighbour distance →

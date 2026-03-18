@@ -120,6 +120,7 @@ class TestGeneticOptimiser:
             total = 0
             for i in range(1, len(tour)):
                 total += dist[tour[i]][tour[i - 1]]
+            total += dist[tour[0]][tour[-1]]  # return edge to complete the tour
             return total
 
         ga = GeneticOptimiser(
