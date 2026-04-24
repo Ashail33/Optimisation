@@ -46,7 +46,8 @@ A generalised, extensible metaheuristic optimisation library in Python.
 pip install -e ".[dev]"   # editable install with test dependencies
 ```
 
-Requires Python ≥ 3.9 and NumPy ≥ 1.21. No other runtime dependencies.
+Requires Python ≥ 3.10 and NumPy ≥ 1.26. Tested on Python 3.10 – 3.14. No
+other runtime dependencies.
 
 After install, verify the package is importable:
 
