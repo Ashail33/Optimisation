@@ -22,6 +22,7 @@ A generalised, extensible metaheuristic optimisation library in Python.
 - [OptimisationResult](#optimisationresult)
 - [Custom Operators](#custom-operators)
 - [Parameter Tuning Tips](#parameter-tuning-tips)
+- [Integration](#integration)
 - [Running Tests](#running-tests)
 
 ---
@@ -45,7 +46,21 @@ A generalised, extensible metaheuristic optimisation library in Python.
 pip install -e ".[dev]"   # editable install with test dependencies
 ```
 
-Requires Python ≥ 3.9, NumPy ≥ 1.21, and pandas ≥ 1.3.
+Requires Python ≥ 3.9 and NumPy ≥ 1.21. No other runtime dependencies.
+
+After install, verify the package is importable:
+
+```python
+import optim
+print(optim.__version__)      # '0.1.0'
+print(optim.__all__)          # list of public classes
+```
+
+The legacy reference scripts in the repository root (`DBMOSA algorithm.py`,
+`Genetic search algorithm.py`, `Local Search function`,
+`Particle swarm optimisation algorithm`) are the original un-packaged
+implementations kept for historical reference only. **Always use the `optim`
+package** — it is the integration target.
 
 ---
 
@@ -635,6 +650,51 @@ ls = LocalSearchOptimiser(neighbourhood_fn=my_neighbourhood)
   sensitive to initialisation (e.g. SA on a rugged landscape).
 
 ---
+
+## Integration
+
+Every optimiser in `optim` follows the same contract, which makes them
+interchangeable in any downstream pipeline:
+
+```python
+class MyOptimiser(BaseOptimiser):
+    def optimise(self, objective_fn, bounds=None, *, maximise=False, **kwargs):
+        ...
+        return OptimisationResult(
+            best_solution=...,
+            best_value=...,
+            history=[...],
+            n_evaluations=...,
+        )
+```
+
+Uniform contract recap:
+
+- Subclass [`BaseOptimiser`][optim.base.BaseOptimiser] and implement
+  `optimise(objective_fn, bounds, *, maximise=False, **kwargs)`.
+- Accept arbitrary extra `**kwargs` so the optimiser plays nicely with
+  `EnsembleOptimiser`, which forwards per-optimiser kwargs.
+- Always return an [`OptimisationResult`][optim.base.OptimisationResult] (or a
+  subclass thereof).
+- Respect `maximise=True` — use `self._wrap_objective(objective_fn, maximise)`
+  from the base class to get a function that is always internally minimised.
+- Count every objective-function call into `n_evaluations`.
+
+Once a new optimiser follows that contract it can be:
+
+- Called directly with the same signature as every built-in optimiser.
+- Dropped into [`EnsembleOptimiser`][optim.ensemble.EnsembleOptimiser] for
+  `'best'`, `'chain'`, or `'random_restart'` composition.
+- Registered in the `OPTIMISERS` dictionary exported by the package so that
+  config-driven code can instantiate it by name:
+
+```python
+from optim import OPTIMISERS
+
+cls = OPTIMISERS["pso"]           # PSOOptimiser
+opt = cls(n_particles=20, seed=0)
+result = opt.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
+```
 
 ## Running Tests
 

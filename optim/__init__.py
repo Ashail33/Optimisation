@@ -32,6 +32,20 @@ from .local_search import LocalSearchOptimiser
 from .pso import PSOOptimiser
 from .sa import DBMOSAOptimiser, SimulatedAnnealingOptimiser
 
+__version__ = "0.1.0"
+
+# Registry of concrete optimiser classes keyed by short name.  Useful for
+# building CLIs / config-driven pipelines that instantiate optimisers
+# dynamically, e.g. ``OPTIMISERS["pso"](n_particles=20)``.
+OPTIMISERS = {
+    "genetic": GeneticOptimiser,
+    "pso": PSOOptimiser,
+    "local_search": LocalSearchOptimiser,
+    "sa": SimulatedAnnealingOptimiser,
+    "dbmosa": DBMOSAOptimiser,
+    "ensemble": EnsembleOptimiser,
+}
+
 __all__ = [
     "BaseOptimiser",
     "OptimisationResult",
@@ -42,4 +56,6 @@ __all__ = [
     "DBMOSAOptimiser",
     "EnsembleOptimiser",
     "EnsembleResult",
+    "OPTIMISERS",
+    "__version__",
 ]
