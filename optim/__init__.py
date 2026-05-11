@@ -1,14 +1,24 @@
 """
-optim — A generalised optimisation library.
+optim — A generalised optimisation and metaheuristic library.
 
 Available optimisers
 --------------------
-* :class:`GeneticOptimiser` — Genetic Algorithm (real / binary / permutation)
-* :class:`PSOOptimiser` — Particle Swarm Optimisation
-* :class:`LocalSearchOptimiser` — Best-improvement Local Search
-* :class:`SimulatedAnnealingOptimiser` — Single-objective Simulated Annealing
-* :class:`DBMOSAOptimiser` — Dominance-Based Multi-Objective SA
-* :class:`EnsembleOptimiser` — Combine optimisers (best / chain / restart)
+Single-solution (trajectory) methods
+    * :class:`LocalSearchOptimiser` — best-improvement local search
+    * :class:`TabuSearchOptimiser` — local search with tabu memory
+    * :class:`SimulatedAnnealingOptimiser` — single-objective Simulated Annealing
+    * :class:`DBMOSAOptimiser` — Dominance-Based Multi-Objective SA
+
+Population-based methods
+    * :class:`GeneticOptimiser` — Genetic Algorithm (real / binary / permutation)
+    * :class:`PSOOptimiser` — Particle Swarm Optimisation
+    * :class:`DifferentialEvolutionOptimiser` — DE/rand/1/bin
+
+Baseline
+    * :class:`RandomSearchOptimiser` — uniform-random sampling
+
+Ensembles (composition of optimisers)
+    * :class:`EnsembleOptimiser` — Portfolio / Pipeline / Multi-start
 
 Data containers
 ---------------
@@ -26,13 +36,16 @@ Quick start
 """
 
 from .base import BaseOptimiser, OptimisationResult
+from .de import DifferentialEvolutionOptimiser
 from .ensemble import EnsembleOptimiser, EnsembleResult
 from .genetic import GeneticOptimiser
 from .local_search import LocalSearchOptimiser
 from .pso import PSOOptimiser
+from .random_search import RandomSearchOptimiser
 from .sa import DBMOSAOptimiser, SimulatedAnnealingOptimiser
+from .tabu import TabuSearchOptimiser
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Registry of concrete optimiser classes keyed by short name.  Useful for
 # building CLIs / config-driven pipelines that instantiate optimisers
@@ -40,9 +53,12 @@ __version__ = "0.1.0"
 OPTIMISERS = {
     "genetic": GeneticOptimiser,
     "pso": PSOOptimiser,
+    "de": DifferentialEvolutionOptimiser,
     "local_search": LocalSearchOptimiser,
+    "tabu": TabuSearchOptimiser,
     "sa": SimulatedAnnealingOptimiser,
     "dbmosa": DBMOSAOptimiser,
+    "random_search": RandomSearchOptimiser,
     "ensemble": EnsembleOptimiser,
 }
 
@@ -51,9 +67,12 @@ __all__ = [
     "OptimisationResult",
     "GeneticOptimiser",
     "PSOOptimiser",
+    "DifferentialEvolutionOptimiser",
     "LocalSearchOptimiser",
+    "TabuSearchOptimiser",
     "SimulatedAnnealingOptimiser",
     "DBMOSAOptimiser",
+    "RandomSearchOptimiser",
     "EnsembleOptimiser",
     "EnsembleResult",
     "OPTIMISERS",

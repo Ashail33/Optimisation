@@ -1,42 +1,73 @@
-# Optimisation
+# optim — A Metaheuristic Optimisation Library
 
-A generalised, extensible metaheuristic optimisation library in Python.
+A generalised, extensible library of metaheuristic optimisation algorithms
+in Python. Every optimiser obeys the same `BaseOptimiser` interface, so
+algorithms are interchangeable in any pipeline and can be composed into
+ensembles without glue code.
 
 ## Table of Contents
 
-- [Included Optimisers](#included-optimisers)
+- [Features](#features)
 - [Installation](#installation)
-- [Structuring Your Problem](#structuring-your-problem)
-  - [Step 1 — Write your objective function](#step-1--write-your-objective-function)
-  - [Step 2 — Define your decision variables](#step-2--define-your-decision-variables)
-  - [Step 3 — Choose an encoding](#step-3--choose-an-encoding)
-  - [Step 4 — Choose an optimiser](#step-4--choose-an-optimiser)
 - [Quick Start](#quick-start)
-- [Optimiser Reference](#optimiser-reference)
-  - [GeneticOptimiser](#geneticoptimiser)
-  - [PSOOptimiser](#psooptimiser)
-  - [LocalSearchOptimiser](#localsearchoptimiser)
-  - [SimulatedAnnealingOptimiser](#simulatedannealingoptimiser)
-  - [DBMOSAOptimiser](#dbmosaoptimiser)
-  - [EnsembleOptimiser](#ensembleoptimiser)
+- [Notation](#notation)
+- [The Optimiser Standard](#the-optimiser-standard)
+- [Algorithms](#algorithms)
+  - [Random Search](#random-search-randomsearchoptimiser)
+  - [Local Search](#local-search-localsearchoptimiser)
+  - [Tabu Search](#tabu-search-tabusearchoptimiser)
+  - [Simulated Annealing](#simulated-annealing-simulatedannealingoptimiser)
+  - [DBMOSA (multi-objective SA)](#dbmosa-dbmosaoptimiser)
+  - [Genetic Algorithm](#genetic-algorithm-geneticoptimiser)
+  - [Differential Evolution](#differential-evolution-differentialevolutionoptimiser)
+  - [Particle Swarm Optimisation](#particle-swarm-optimisation-psooptimiser)
+- [Ensembles — Three Families](#ensembles--three-families)
+  - [Portfolio](#1-portfolio-aliasbest)
+  - [Pipeline](#2-pipeline-aliaschain)
+  - [Multi-start](#3-multi-start-aliasrandom_restart)
 - [OptimisationResult](#optimisationresult)
+- [Encodings](#encodings)
 - [Custom Operators](#custom-operators)
+- [Adding Your Own Optimiser](#adding-your-own-optimiser)
 - [Parameter Tuning Tips](#parameter-tuning-tips)
-- [Integration](#integration)
 - [Running Tests](#running-tests)
+- [References](#references)
 
 ---
 
-## Included Optimisers
+## Features
 
-| Class | Algorithm | Search space |
-|---|---|---|
-| `GeneticOptimiser` | Genetic Algorithm | real / binary / permutation |
-| `PSOOptimiser` | Particle Swarm Optimisation | continuous |
-| `LocalSearchOptimiser` | Best-improvement Local Search | real / binary |
-| `SimulatedAnnealingOptimiser` | Simulated Annealing | continuous |
-| `DBMOSAOptimiser` | Dominance-Based Multi-Objective SA | continuous (multi-obj) |
-| `EnsembleOptimiser` | Combine optimisers (best / chain / restart) | any |
+| Family | Optimiser | Search space | Multi-objective |
+|---|---|---|---|
+| Baseline | `RandomSearchOptimiser` | real / binary | — |
+| Trajectory | `LocalSearchOptimiser` | real / binary | — |
+| Trajectory | `TabuSearchOptimiser` | real / permutation | — |
+| Trajectory | `SimulatedAnnealingOptimiser` | real | — |
+| Trajectory | `DBMOSAOptimiser` | real | yes (Pareto archive) |
+| Population | `GeneticOptimiser` | real / binary / permutation | — |
+| Population | `DifferentialEvolutionOptimiser` | real | — |
+| Population | `PSOOptimiser` | real | — |
+| Ensemble | `EnsembleOptimiser` | any | inherits |
+
+Cross-cutting features:
+
+- **Uniform interface** — every optimiser exposes the same
+  `optimise(objective_fn, bounds=..., maximise=False, **kwargs)` call.
+- **Minimise or maximise** with a single flag; you never need to negate.
+- **Encoding-aware defaults** — real-valued, binary, and permutation
+  operators are built in; supply a callable to override any of them.
+- **Custom operators** — crossover, mutation, neighbourhood, sampler, and
+  move generators are all pluggable.
+- **Reproducibility** — every optimiser accepts a `seed`.
+- **Stopping rules** — every optimiser exposes both a budget cap
+  (iterations/generations/epochs/evaluations) and a stagnation cap
+  (`max_no_improve`).
+- **Result object** — a single `OptimisationResult` dataclass with
+  `best_solution`, `best_value`, `history`, and `n_evaluations`.
+- **Ensembles** — three composition families
+  (portfolio / pipeline / multi-start) usable on any optimiser mix.
+- **Registry** — `optim.OPTIMISERS` maps short names to classes for
+  config-driven pipelines.
 
 ---
 
@@ -46,97 +77,24 @@ A generalised, extensible metaheuristic optimisation library in Python.
 pip install -e ".[dev]"   # editable install with test dependencies
 ```
 
-Requires Python ≥ 3.10 and NumPy ≥ 1.26. Tested on Python 3.10 – 3.14. No
+Requires Python >= 3.10 and NumPy >= 1.26. Tested on Python 3.10 - 3.14. No
 other runtime dependencies.
 
 After install, verify the package is importable:
 
 ```python
 import optim
-print(optim.__version__)      # '0.1.0'
-print(optim.__all__)          # list of public classes
+print(optim.__version__)      # '0.2.0'
+print(sorted(optim.OPTIMISERS))
+# ['dbmosa', 'de', 'ensemble', 'genetic', 'local_search',
+#  'pso', 'random_search', 'sa', 'tabu']
 ```
 
-The legacy reference scripts in the repository root (`DBMOSA algorithm.py`,
+The legacy reference scripts at the repository root (`DBMOSA algorithm.py`,
 `Genetic search algorithm.py`, `Local Search function`,
 `Particle swarm optimisation algorithm`) are the original un-packaged
-implementations kept for historical reference only. **Always use the `optim`
+implementations kept for historical reference. **Always use the `optim`
 package** — it is the integration target.
-
----
-
-## Structuring Your Problem
-
-All optimisers in this library share the same four-step workflow.
-
-### Step 1 — Write your objective function
-
-Your objective function takes a single argument — the **solution** (a list of
-values) — and returns a **scalar** (or a list of scalars for multi-objective
-problems).  It must be self-contained: no side-effects, no shared mutable
-state.
-
-```python
-# Single-objective: minimise the sphere function
-def sphere(x):
-    return sum(v**2 for v in x)
-
-# Multi-objective: two competing objectives
-def bi_objective(x):
-    return [x[0]**2, (x[0] - 2)**2]
-
-# Combinatorial: Travelling Salesman Problem cost
-distances = [[0, 10, 20], [10, 0, 15], [20, 15, 0]]
-
-def tsp_cost(tour):
-    return sum(distances[tour[i]][tour[i-1]] for i in range(len(tour)))
-```
-
-To **maximise** instead of minimise, pass `maximise=True` to `optimise()` —
-you do **not** need to negate your function.
-
-```python
-result = optimiser.optimise(my_fn, bounds=..., maximise=True)
-```
-
-### Step 2 — Define your decision variables
-
-**Continuous / real-valued variables** are defined via `bounds`, a list of
-`(min, max)` tuples — one per variable.
-
-```python
-# Two variables: x ∈ [-5, 5], y ∈ [0, 10]
-bounds = [(-5.0, 5.0), (0.0, 10.0)]
-```
-
-**Binary variables** are represented as a list of 0s and 1s.  Provide
-`n_genes` (the number of bits) or a `bounds` list whose length sets the gene
-count.
-
-**Permutation variables** are a list containing each integer from `0` to
-`n_genes - 1` exactly once (useful for sequencing / routing problems).
-Provide `n_genes` to the `optimise()` call.
-
-### Step 3 — Choose an encoding
-
-| Problem type | Encoding | Optimiser(s) |
-|---|---|---|
-| Real-valued continuous variables | `'real'` | GA, PSO, LS, SA |
-| Bit strings / feature selection | `'binary'` | GA, LS |
-| Permutations / sequencing (e.g. TSP) | `'permutation'` | GA |
-| Multiple competing objectives | multi-objective | DBMOSA |
-
-### Step 4 — Choose an optimiser
-
-| Situation | Recommended optimiser |
-|---|---|
-| Continuous landscape, fast convergence needed | `PSOOptimiser` |
-| Mixed or unknown landscape, need flexibility | `GeneticOptimiser` |
-| Good starting point known, need local refinement | `LocalSearchOptimiser` |
-| Rugged landscape, risk of local optima | `SimulatedAnnealingOptimiser` |
-| Multiple competing objectives | `DBMOSAOptimiser` |
-| Unsure which algorithm to use | `EnsembleOptimiser` (strategy `'best'`) |
-| Want global search then precise local refinement | `EnsembleOptimiser` (strategy `'chain'`) |
 
 ---
 
@@ -145,560 +103,738 @@ Provide `n_genes` to the `optimise()` call.
 Every optimiser shares the same call signature:
 
 ```python
-result = optimiser.optimise(objective_fn, bounds=..., maximise=False)
-print(result.best_solution, result.best_value)
-```
-
-```python
 from optim import PSOOptimiser
 
-pso = PSOOptimiser(n_particles=30, max_no_improve=200)
+pso = PSOOptimiser(n_particles=30, max_no_improve=200, seed=0)
 result = pso.optimise(
     lambda x: x[0]**2 + x[1]**2,
     bounds=[(-5.0, 5.0), (-5.0, 5.0)],
 )
-print(result)  # OptimisationResult(best_value=..., n_evaluations=...)
-```
-
----
-
-## Optimiser Reference
-
-### GeneticOptimiser
-
-Genetic Algorithm supporting real-valued, binary, and permutation encodings.
-Uses fitness-proportionate (roulette-wheel) parent selection and steady-state
-replacement.
-
-#### Constructor parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `population_size` | `int` | `50` | Number of individuals per generation. |
-| `elite_size` | `int` | `10` | Top solutions kept each generation (steady-state replacement). |
-| `n_parents` | `int` | `6` | Parents selected per reproduction step; must be a positive even number. |
-| `max_no_improve` | `int` | `100` | Stop after this many consecutive generations with no improvement. |
-| `max_generations` | `int\|None` | `1000` | Hard upper limit on generations. `None` = no hard limit. |
-| `encoding` | `str` | `'real'` | Solution representation: `'real'`, `'binary'`, or `'permutation'`. |
-| `crossover_fn` | `callable\|None` | `None` | Custom crossover `(parent1, parent2) -> (child1, child2)`. Uses built-in default when `None`. |
-| `mutation_fn` | `callable\|None` | `None` | Custom mutation `(solution) -> mutated`. Uses built-in default when `None`. |
-| `seed` | `int\|None` | `None` | Random seed for reproducibility. |
-
-#### `optimise()` parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Function to optimise; accepts a solution list and returns a scalar. |
-| `bounds` | `list of (min, max)` | `None` | Required for `encoding='real'`. Also sets `n_genes` for `'binary'` if not given. |
-| `maximise` | `bool` | `False` | Set `True` to maximise instead of minimise. |
-| `n_genes` | `int\|None` | `None` | Gene count for `'binary'` or `'permutation'` encodings. |
-
-#### Built-in operators by encoding
-
-| Encoding | Default crossover | Default mutation |
-|---|---|---|
-| `'real'` | Arithmetic (blend) crossover | Gaussian perturbation clamped to bounds |
-| `'binary'` | Single-point crossover | Bit-flip (one random gene) |
-| `'permutation'` | Order crossover (OX) | Swap two random positions |
-
-#### Examples
-
-```python
-from optim import GeneticOptimiser
-
-# --- Real-valued: minimise sphere function ---
-ga = GeneticOptimiser(population_size=50, max_no_improve=100, encoding='real')
-result = ga.optimise(lambda x: sum(v**2 for v in x), bounds=[(-5, 5)] * 3)
 print(result.best_solution, result.best_value)
-
-# --- Permutation: Travelling Salesman Problem ---
-dist = [[0, 10, 20], [10, 0, 15], [20, 15, 0]]
-def tsp(tour):
-    return sum(dist[tour[i]][tour[i-1]] for i in range(1, len(tour)))
-
-ga_tsp = GeneticOptimiser(encoding='permutation', max_no_improve=50)
-result = ga_tsp.optimise(tsp, n_genes=3)
-
-# --- Binary: maximise number of 1-bits ---
-ga_bin = GeneticOptimiser(encoding='binary', max_no_improve=30)
-result = ga_bin.optimise(sum, n_genes=10, maximise=True)
 ```
 
----
-
-### PSOOptimiser
-
-Classic *gbest* Particle Swarm Optimisation for continuous decision spaces.
-Particles clamp to bounds on collision and reflect their velocity.
-
-#### Constructor parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `n_particles` | `int` | `30` | Number of particles in the swarm. |
-| `c1` | `float` | `1.5` | Cognitive (personal-best) acceleration coefficient. |
-| `c2` | `float` | `1.5` | Social (global-best) acceleration coefficient. |
-| `w` | `float` | `0.7` | Inertia weight — balances exploration vs. exploitation. |
-| `w_decay` | `float` | `1.0` | Factor multiplied to `w` each iteration. `1.0` = no decay. |
-| `max_no_improve` | `int` | `200` | Stop after this many consecutive swarm-level non-improving steps. |
-| `max_iterations` | `int\|None` | `5000` | Hard upper limit on iterations. `None` = no hard limit. |
-| `precision` | `int` | `4` | Decimal places to round randomly initialised positions to. |
-| `seed` | `int\|None` | `None` | Random seed for reproducibility. |
-
-#### `optimise()` parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Objective function; accepts a list and returns a scalar. |
-| `bounds` | `list of (min, max)` | — | Required. One tuple per decision variable. |
-| `maximise` | `bool` | `False` | Set `True` to maximise. |
-| `initial_solutions` | `list of lists\|None` | `None` | Warm-start seeds for some particles; remaining are random. |
-
-#### Example
+Want to compare three algorithms and keep the best? Drop them into a
+portfolio ensemble:
 
 ```python
-from optim import PSOOptimiser
+from optim import (
+    GeneticOptimiser, DifferentialEvolutionOptimiser,
+    PSOOptimiser, EnsembleOptimiser,
+)
 
-pso = PSOOptimiser(n_particles=30, c1=1.5, c2=1.5, w=0.7, max_no_improve=200)
-result = pso.optimise(
+ens = EnsembleOptimiser(
+    [GeneticOptimiser(seed=0),
+     DifferentialEvolutionOptimiser(seed=0),
+     PSOOptimiser(seed=0)],
+    strategy="portfolio",
+)
+result = ens.optimise(
     lambda x: x[0]**2 + x[1]**2,
     bounds=[(-5.0, 5.0), (-5.0, 5.0)],
 )
-print(result)  # OptimisationResult(best_value=..., n_evaluations=...)
 ```
 
 ---
 
-### LocalSearchOptimiser
+## Notation
 
-Best-improvement local search.  At each step every neighbour of the current
-solution is evaluated and the algorithm moves to the best improving one.
-Terminates when no improving neighbour exists (strict local optimum) or the
-budget is exhausted.
+The same symbols are used in every algorithm description below.
 
-#### Constructor parameters
+| Symbol | Meaning |
+|---|---|
+| $x$ | a candidate solution (decision vector) |
+| $x_j$ | the $j$-th decision variable of $x$ |
+| $x^{(i)}$ | the $i$-th individual in a population |
+| $f(x)$ | objective function value at $x$ |
+| $D$ | number of decision variables (dimensionality) |
+| $N$ | population / swarm size |
+| $t$ | iteration / generation / epoch counter |
+| $x^\star, f^\star$ | best solution and best value found so far |
+| $\mathcal{N}(x)$ | neighbourhood of $x$ |
+| $[l_j, u_j]$ | lower and upper bound of variable $j$ |
+| $\mathcal{U}(a, b)$ | uniform random number in $[a, b]$ |
+| $T$ | temperature (Simulated Annealing) |
+| $\alpha$ | cooling / contraction parameter |
+| $w, c_1, c_2$ | PSO inertia and acceleration coefficients |
+| $p^{(i)}, g$ | PSO personal best of particle $i$, global best |
+| $v^{(i)}$ | PSO velocity of particle $i$ |
+| $F, CR$ | DE differential weight, crossover probability |
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `encoding` | `str` | `'real'` | `'real'` (step neighbourhood) or `'binary'` (bit-flip neighbourhood). |
-| `step_size` | `float` | `0.01` | Step size for the real-valued neighbourhood (distance added/subtracted per dimension). |
-| `max_no_improve` | `int\|None` | `None` | Stop after this many non-improving moves. `None` = stop only at a strict local optimum. |
-| `max_iterations` | `int\|None` | `10000` | Hard upper limit on local search steps. |
-| `neighbourhood_fn` | `callable\|None` | `None` | Custom neighbourhood generator `(solution) -> list[solution]`. Overrides `encoding` and `step_size` when set. |
-| `seed` | `int\|None` | `None` | Random seed for reproducibility. |
+All optimisers internally **minimise**. To maximise, pass `maximise=True` to
+`optimise()`; the wrapper negates the objective transparently.
 
-#### `optimise()` parameters
+---
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Objective function. |
-| `bounds` | `list of (min, max)\|None` | `None` | Used to generate random initial solutions and clamp the step neighbourhood. |
-| `maximise` | `bool` | `False` | Set `True` to maximise. |
-| `initial_solution` | `list\|None` | `None` | Starting solution. Random if `None` (requires `bounds`). |
-| `constraints_fn` | `callable\|None` | `None` | `constraints_fn(solution) -> bool`. Infeasible neighbours are skipped. |
+## The Optimiser Standard
 
-#### Example
+Every optimiser in `optim` is a concrete subclass of `BaseOptimiser` and
+satisfies the following contract:
+
+```python
+class BaseOptimiser(ABC):
+    @abstractmethod
+    def optimise(
+        self,
+        objective_fn: Callable[[Any], float],
+        bounds: Optional[List[Tuple[float, float]]] = None,
+        *,
+        maximise: bool = False,
+        **kwargs: Any,
+    ) -> OptimisationResult:
+        ...
+```
+
+Rules of the standard:
+
+1. **Signature** — `optimise()` always accepts `objective_fn` and `bounds`
+   positionally, then keyword-only `maximise`, plus `**kwargs` for algorithm-
+   specific extras (`n_genes`, `initial_solution`, `initial_solutions`,
+   `constraints_fn`, ...).
+2. **Direction handling** — every optimiser calls
+   `self._wrap_objective(objective_fn, maximise)` so the internal logic is
+   always minimisation; the wrapper negates the objective when
+   `maximise=True`.
+3. **Return type** — always an `OptimisationResult` (or a subclass such as
+   `EnsembleResult`).
+4. **Stopping rules** — at least one of `max_iterations` /
+   `max_generations` / `max_epochs` / `max_evaluations`, plus a stagnation
+   cap `max_no_improve` where applicable. Both must be respected.
+5. **Evaluation count** — every call to the objective function must be
+   counted into `OptimisationResult.n_evaluations`.
+6. **History** — `OptimisationResult.history` is the running best objective
+   value (one entry per major step). For minimisation it is monotonically
+   non-increasing.
+7. **Reproducibility** — accept a `seed` in `__init__` and seed all RNGs
+   inside `optimise()` if it is set.
+8. **Encoding awareness** — when the optimiser supports multiple encodings,
+   expose an `encoding` parameter and validate it in `__init__`.
+9. **No hidden globals** — operators must be pure functions or methods so
+   the optimiser can be safely reused and composed.
+
+If your code follows these rules it is automatically:
+
+- usable interchangeably anywhere `BaseOptimiser` is accepted,
+- composable inside any `EnsembleOptimiser` strategy,
+- registrable in `optim.OPTIMISERS` for config-driven dispatch.
+
+---
+
+## Algorithms
+
+### Random Search (`RandomSearchOptimiser`)
+
+The canonical baseline. Drawn $N_{\text{eval}}$ samples uniformly from the
+search space and keeps the best.
+
+For real-valued problems, sample $x \sim \mathcal{U}(l, u)$. For binary
+problems, sample each gene from $\{0, 1\}$. A custom `sample_fn` overrides
+both.
+
+```text
+for t = 1 ... N_eval:
+    x ~ Uniform(l, u)
+    if f(x) < f*: x*, f* <- x, f(x)
+```
+
+**Key parameters:** `encoding`, `max_evaluations`, `sample_fn`, `seed`.
+
+```python
+from optim import RandomSearchOptimiser
+
+rs = RandomSearchOptimiser(max_evaluations=500, seed=0)
+result = rs.optimise(lambda x: x[0]**2 + x[1]**2,
+                     bounds=[(-5, 5), (-5, 5)])
+```
+
+Use it as a sanity check: if a fancier algorithm cannot beat it on your
+problem, the algorithm or its tuning is suspect.
+
+---
+
+### Local Search (`LocalSearchOptimiser`)
+
+Best-improvement local search. At every step it evaluates every neighbour
+in $\mathcal{N}(x)$ and moves to the best improving one. Terminates at a
+strict local optimum or when a budget is exhausted.
+
+Default neighbourhoods:
+
+- **real**: $\mathcal{N}(x) = \{x \pm \delta e_j : j = 1,\dots,D\}$ clamped
+  to bounds. $\delta$ is `step_size`.
+- **binary**: bit-flip neighbourhood
+  $\mathcal{N}(x) = \{x \oplus e_j : j = 1,\dots,D\}$.
+
+```text
+repeat:
+    N <- neighbourhood(x)               # filtered by constraints_fn
+    x' <- argmin_{n in N} f(n)
+    if f(x') < f(x): x <- x'
+    else: stop (strict local optimum)
+```
+
+**Key parameters:** `encoding`, `step_size`, `max_no_improve`,
+`max_iterations`, `neighbourhood_fn`, `seed`.
+
+`optimise()` extras: `initial_solution`, `constraints_fn(x) -> bool`.
 
 ```python
 from optim import LocalSearchOptimiser
 
 ls = LocalSearchOptimiser(step_size=0.05)
-result = ls.optimise(
-    lambda x: x[0]**2 + x[1]**2,
-    bounds=[(-5, 5), (-5, 5)],
-    initial_solution=[3.0, -2.0],
-    constraints_fn=lambda x: x[0] >= 0,   # optional feasibility filter
-)
-print(result.best_solution, result.best_value)
+result = ls.optimise(lambda x: x[0]**2 + x[1]**2,
+                     bounds=[(-5, 5), (-5, 5)],
+                     initial_solution=[3.0, -2.0],
+                     constraints_fn=lambda x: x[0] >= 0)
 ```
 
 ---
 
-### SimulatedAnnealingOptimiser
+### Tabu Search (`TabuSearchOptimiser`)
 
-Single-objective Simulated Annealing for continuous decision spaces.  Uses a
-random step move by default (perturb one dimension by a fraction of its
-range).  Accepts/rejects candidates probabilistically via the Metropolis
-criterion.
+Local search with short-term memory (Glover, 1986). Maintains a *tabu list*
+of recently visited moves; the best **non-tabu** neighbour is chosen at
+each step, even if it worsens $f$. A tabu move is accepted anyway when it
+satisfies the **aspiration criterion** (it would improve $f^\star$).
 
-#### Constructor parameters
+Default neighbourhoods:
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `initial_temp` | `float` | `1e6` | Starting temperature. Higher values allow more uphill moves early on. |
-| `cooling_rate` | `float` | `0.9999` | Cooling factor α. Interpretation depends on `schedule` (see below). |
-| `reheating_rate` | `float` | `0.5` | Reheating factor for Dynamic epoch when `max_rejected` is hit. |
-| `max_accepted` | `int` | `200` | Max accepted moves per epoch (Dynamic epoch only). |
-| `max_rejected` | `int` | `150` | Max rejected moves per epoch (Dynamic epoch only). Triggers reheating. |
-| `static_epoch_length` | `int` | `100` | Moves per epoch when `epoch_type='Static'`. |
-| `max_epochs` | `int` | `10000` | Maximum number of epochs. |
-| `min_temp` | `float` | `1e-6` | Temperature at which the algorithm stops (temperature termination). |
-| `schedule` | `str` | `'Geometric'` | Cooling schedule: `'Linear'`, `'Geometric'`, `'Logarithmic'`, or `'Very slow cooling'`. |
-| `epoch_type` | `str` | `'Dynamic'` | Epoch length strategy: `'Dynamic'` (accept/reject driven) or `'Static'` (fixed length). |
-| `termination` | `str` | `'epoch'` | Stop on `'epoch'` count or `'temperature'` threshold. |
-| `neighbour_fn` | `callable\|None` | `None` | Custom move generator `(solution, bounds) -> new_solution`. |
-| `move_scale` | `float` | `0.05` | Scale of default random step (fraction of dimension range). |
-| `seed` | `int\|None` | `None` | Random seed for reproducibility. |
+- **real**: $\pm\delta$ step in each dimension (move key = rounded
+  position).
+- **permutation**: all 2-opt swaps (move key = swapped index pair).
 
-#### Cooling schedule formulae
+```text
+repeat:
+    N  <- neighbourhood(x)
+    x' <- argmin_{n in N \ tabu (or aspirating)} f(n)
+    if x' is None: stop
+    push move(x -> x') onto tabu list (length = tabu_tenure)
+    x <- x'
+    if f(x) < f*: x*, f* <- x, f(x)
+```
+
+**Key parameters:** `encoding`, `step_size`, `tabu_tenure`,
+`max_iterations`, `max_no_improve`, `neighbourhood_fn`, `seed`.
+
+```python
+from optim import TabuSearchOptimiser
+
+ts = TabuSearchOptimiser(encoding="permutation", tabu_tenure=8,
+                         max_iterations=300, seed=0)
+result = ts.optimise(tsp_cost, n_genes=10)
+```
+
+---
+
+### Simulated Annealing (`SimulatedAnnealingOptimiser`)
+
+A single-trajectory probabilistic search that accepts uphill moves with
+probability $e^{-\Delta f / T}$ (the Metropolis criterion), with $T$
+decaying over time.
+
+```text
+repeat:
+    x' <- neighbour(x)
+    df <- f(x') - f(x)
+    if df < 0 or U(0,1) < exp(-df / T): x <- x'
+    end of epoch: T <- schedule(T)
+```
+
+**Cooling schedules** (parameter $\alpha$):
 
 | Schedule | Cool update | Notes |
 |---|---|---|
-| `'Geometric'` | `T ← T × α` | Most common. `α` near 1 (e.g. 0.9999) gives slow cooling. |
-| `'Linear'` | `T ← T − α` | `α` is the fixed decrement. Use small values relative to `initial_temp`. |
-| `'Logarithmic'` | `T ← T / ln(step)` | Theoretically convergent; can be slow in practice. |
-| `'Very slow cooling'` | `T ← T / (1 + α)` | Slowest schedule; use tiny `α` values. |
+| `Geometric` | $T \leftarrow \alpha T$ | most common; $\alpha$ near 1 = slow |
+| `Linear` | $T \leftarrow T - \alpha$ | $\alpha$ is the decrement |
+| `Logarithmic` | $T \leftarrow T / \ln(t)$ | theoretically convergent, slow |
+| `Very slow cooling` | $T \leftarrow T / (1 + \alpha)$ | tiny $\alpha$ values |
 
-#### `optimise()` parameters
+**Epoch types:**
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Scalar objective function. |
-| `bounds` | `list of (min, max)` | — | Required unless a custom `neighbour_fn` is provided. |
-| `maximise` | `bool` | `False` | Set `True` to maximise. |
-| `initial_solution` | `list\|None` | `None` | Starting solution. Randomly generated within `bounds` if `None`. |
+- `Dynamic` — epoch ends after `max_accepted` accepted moves (then cool) or
+  `max_rejected` rejected moves (then reheat).
+- `Static` — epoch ends after `static_epoch_length` moves (then cool).
 
-#### Example
+**Termination:** `'epoch'` (by epoch count) or `'temperature'` (when
+$T \le T_\min$).
+
+**Key parameters:** `initial_temp`, `cooling_rate` ($\alpha$),
+`reheating_rate`, `max_accepted`, `max_rejected`, `static_epoch_length`,
+`max_epochs`, `min_temp`, `schedule`, `epoch_type`, `termination`,
+`neighbour_fn`, `move_scale`, `seed`.
 
 ```python
 from optim import SimulatedAnnealingOptimiser
 
 sa = SimulatedAnnealingOptimiser(
-    initial_temp=1e6,
-    cooling_rate=0.9999,
-    schedule='Geometric',          # 'Linear', 'Geometric', 'Logarithmic', 'Very slow cooling'
-    epoch_type='Dynamic',          # 'Dynamic' or 'Static'
-    termination='epoch',           # 'epoch' or 'temperature'
-    max_epochs=5000,
+    initial_temp=1e3, cooling_rate=0.99, schedule='Geometric',
+    epoch_type='Dynamic', termination='epoch', max_epochs=5000,
 )
-result = sa.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
-print(result.best_solution, result.best_value)
+result = sa.optimise(lambda x: x[0]**2 + x[1]**2,
+                     bounds=[(-5, 5), (-5, 5)])
 ```
 
 ---
 
-### DBMOSAOptimiser
+### DBMOSA (`DBMOSAOptimiser`)
 
-Dominance-Based Multi-Objective Simulated Annealing.  Maintains a Pareto
-archive and uses a dominance-count ratio (ΔE) to drive acceptance.  Supports
-optional diversity-preservation methods to spread solutions across the Pareto
-front.
+Dominance-Based Multi-Objective Simulated Annealing
+(Bandyopadhyay et al., 2008). The objective returns a vector
+$\mathbf{f}(x) = (f_1(x), \dots, f_M(x))$ and the algorithm maintains a
+Pareto archive $\mathcal{A}$ of non-dominated solutions.
 
-Your **objective function must return a list** of scalar values (one per
-objective).  All objectives are minimised by default; pass `maximise=True` to
-maximise all of them.
+Acceptance uses a **dominance-count energy** based on how many archive
+members dominate the current and candidate solutions:
 
-The returned `result.best_solution` is the **Pareto archive** — a list of
-non-dominated solutions.
+$$\Delta E = \frac{-\#\text{dom}(x) + \#\text{dom}(x')}{|\mathcal{A}| + 2}$$
 
-#### Constructor parameters
+A candidate is accepted with probability $\min(1, e^{-\Delta E / T})$.
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `initial_temp` | `float` | `1e9` | Starting temperature. |
-| `cooling_rate` | `float` | `0.9999` | Cooling factor α. |
-| `reheating_rate` | `float` | `0.5` | Reheating factor (Dynamic epoch). |
-| `max_accepted` | `int` | `200` | Max accepted moves per epoch (Dynamic). |
-| `max_rejected` | `int` | `150` | Max rejected moves per epoch (Dynamic). |
-| `static_epoch_length` | `int` | `100` | Moves per epoch (Static). |
-| `max_epochs` | `int` | `20000` | Maximum epochs. |
-| `min_temp` | `float` | `1e-4` | Temperature threshold for `termination='temperature'`. |
-| `schedule` | `str` | `'Geometric'` | Cooling schedule (same options as SA). |
-| `epoch_type` | `str` | `'Dynamic'` | `'Dynamic'` or `'Static'`. |
-| `termination` | `str` | `'temperature'` | `'epoch'` or `'temperature'`. |
-| `diversity_method` | `str\|None` | `None` | Diversity-preservation strategy: `'Kernel'`, `'NN'`, `'Histogram'`, or `None`. |
-| `diversity_threshold` | `float` | `5.0` | Density threshold for the `'Histogram'` method. |
-| `min_archive_for_diversity` | `int` | `5` | Diversity criterion activates once the archive reaches this size. |
-| `max_archive_size` | `int\|None` | `100` | Maximum archive size. Most-crowded solution is pruned when exceeded. `None` = unlimited. |
-| `neighbour_fn` | `callable\|None` | `None` | Custom move generator `(solution, bounds) -> new_solution`. |
-| `move_scale` | `float` | `0.1` | Scale of default random step. |
-| `seed` | `int\|None` | `None` | Random seed. |
+**Diversity preservation** (optional): `'Kernel'`, `'NN'`, or `'Histogram'`
+modify $\Delta E$ to discourage crowded regions of objective space. When
+the archive exceeds `max_archive_size`, the most crowded solution
+(smallest 1-NN distance in objective space) is pruned.
 
-#### Diversity methods
-
-| Method | Behaviour |
-|---|---|
-| `None` | No diversity preservation (archive pruned by crowding distance only). |
-| `'Kernel'` | Kernel density estimate; divides ΔE by local density to reward sparse regions. |
-| `'Histogram'` | Rejects candidates landing in over-populated histogram cells (threshold set by `diversity_threshold`). |
-| `'NN'` | Nearest-neighbour crowding; penalises the most-crowded candidate. |
-
-#### `optimise()` parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Multi-objective function returning a list of scalars. |
-| `bounds` | `list of (min, max)` | — | Required unless a custom `neighbour_fn` is given. |
-| `maximise` | `bool` | `False` | Set `True` to maximise all objectives. |
-| `initial_solution` | `list\|None` | `None` | Starting solution. Random if `None`. |
-
-#### Example
+The returned `best_solution` is the **Pareto archive** — a list of
+non-dominated solutions; `best_value` is the mean sum-of-objectives over
+the archive (a coarse quality scalar).
 
 ```python
 from optim import DBMOSAOptimiser
 
 def bi_objective(x):
-    return [x[0]**2, (x[0] - 2)**2]   # two competing objectives
+    return [x[0]**2, (x[0] - 2)**2]
 
-dbmosa = DBMOSAOptimiser(
-    initial_temp=1e7,
-    max_epochs=1000,
-    termination='epoch',
-    diversity_method='Histogram',       # 'Kernel', 'NN', 'Histogram', or None
-    max_archive_size=50,
-)
+dbmosa = DBMOSAOptimiser(initial_temp=1e7, max_epochs=1000,
+                         termination='epoch',
+                         diversity_method='Histogram',
+                         max_archive_size=50)
 result = dbmosa.optimise(bi_objective, bounds=[(-5.0, 5.0)])
-pareto_front = result.best_solution    # list of non-dominated solutions
-print(f"Pareto front size: {len(pareto_front)}")
+print(f"Pareto front size: {len(result.best_solution)}")
 ```
 
 ---
 
-### EnsembleOptimiser
+### Genetic Algorithm (`GeneticOptimiser`)
 
-Combines multiple optimisers using one of three strategies.
+Population-based search with selection, crossover, and mutation. Supports
+three encodings out of the box, each with a sensible default operator
+pair:
 
-#### Constructor parameters
+| Encoding | Default crossover | Default mutation |
+|---|---|---|
+| `real` | arithmetic / blend $c = \lambda p_1 + (1-\lambda) p_2$ | one-coordinate Gaussian perturbation, clamped |
+| `binary` | single-point crossover | one-bit flip |
+| `permutation` | order crossover (OX) | swap two random positions |
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `optimisers` | `list[BaseOptimiser]` | — | Constituent optimisers. For `'random_restart'`, provide a list with one entry. |
-| `strategy` | `str` | `'best'` | `'best'`, `'chain'`, or `'random_restart'`. |
-| `n_restarts` | `int` | `5` | Number of restarts for `strategy='random_restart'`. Ignored for other strategies. |
+Parent selection is fitness-proportionate (roulette-wheel) with inverse
+fitness weights; replacement is steady-state — the best `elite_size` of
+$\{\text{population}\}\cup\{\text{children}\}$ survives.
 
-#### Strategies
+```text
+init population X of size N
+repeat:
+    parents  <- roulette(X, n_parents)
+    children <- crossover(parents) + mutation(one child)
+    X        <- top elite_size of (X ∪ children)
+```
 
-| Strategy | Behaviour |
-|---|---|
-| `'best'` | Run all optimisers independently; return the single best result found. |
-| `'chain'` | Run optimisers sequentially, warm-starting each with the previous optimiser's best solution. |
-| `'random_restart'` | Re-run the same optimiser `n_restarts` times from random starts; return the best result. |
-
-#### `optimise()` parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `objective_fn` | `callable` | — | Objective function passed to every constituent optimiser. |
-| `bounds` | `list of (min, max)\|None` | `None` | Passed to each constituent optimiser. |
-| `maximise` | `bool` | `False` | Passed to each constituent optimiser. |
-| `optimiser_kwargs` | `list[dict]\|None` | `None` | Per-optimiser extra keyword arguments. The i-th dict is passed to the i-th optimiser. |
-
-The return value is an `EnsembleResult` (subclass of `OptimisationResult`)
-that also exposes a `run_results` list with the individual result from each
-constituent run.
-
-#### Examples
+**Key parameters:** `population_size`, `elite_size`, `n_parents`,
+`max_no_improve`, `max_generations`, `encoding`, `crossover_fn`,
+`mutation_fn`, `seed`.
 
 ```python
-from optim import GeneticOptimiser, PSOOptimiser, SimulatedAnnealingOptimiser, EnsembleOptimiser
+from optim import GeneticOptimiser
 
-# --- Strategy: 'best' — run GA and PSO, take the best ---
-ga  = GeneticOptimiser(population_size=30, max_no_improve=50)
-pso = PSOOptimiser(n_particles=20, max_no_improve=100)
+ga = GeneticOptimiser(population_size=50, max_no_improve=100,
+                      encoding='real')
+result = ga.optimise(lambda x: sum(v**2 for v in x),
+                     bounds=[(-5, 5)] * 3)
+```
 
-ens = EnsembleOptimiser([ga, pso], strategy='best')
-result = ens.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
-print(result.run_results)  # per-optimiser results
+---
 
-# --- Strategy: 'chain' — PSO for global search, SA for local refinement ---
-pso = PSOOptimiser(n_particles=20, max_no_improve=50)
-sa  = SimulatedAnnealingOptimiser(initial_temp=100, max_epochs=500)
+### Differential Evolution (`DifferentialEvolutionOptimiser`)
 
-ens = EnsembleOptimiser([pso, sa], strategy='chain')
-result = ens.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
+Storn & Price's DE/rand/1/bin (1997) for continuous spaces. For every
+parent $x^{(i)}$ we draw three distinct indices $a, b, c$ and build a
+**trial vector**:
 
-# --- Strategy: 'random_restart' — run SA five times, keep the best ---
-sa  = SimulatedAnnealingOptimiser(initial_temp=1000, max_epochs=3000)
-ens = EnsembleOptimiser([sa], strategy='random_restart', n_restarts=5)
-result = ens.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
+$$v = x^{(a)} + F \cdot (x^{(b)} - x^{(c)})$$
+
+$$u_j = \begin{cases} v_j & \text{if } \mathcal{U}(0,1) < CR \text{ or } j = j_{\text{rand}} \\ x^{(i)}_j & \text{otherwise} \end{cases}$$
+
+The trial replaces the parent iff $f(u) \le f(x^{(i)})$ (greedy
+selection). $j_{\text{rand}}$ guarantees at least one inherited gene.
+
+**Key parameters:** `population_size` ($N \ge 4$), `F` (differential
+weight), `CR` (crossover probability), `max_generations`, `max_no_improve`,
+`seed`. `optimise()` extras: `initial_solutions`.
+
+```python
+from optim import DifferentialEvolutionOptimiser
+
+de = DifferentialEvolutionOptimiser(population_size=30, F=0.5, CR=0.9,
+                                    max_generations=500, seed=0)
+result = de.optimise(lambda x: x[0]**2 + x[1]**2,
+                     bounds=[(-5, 5), (-5, 5)])
+```
+
+---
+
+### Particle Swarm Optimisation (`PSOOptimiser`)
+
+Classic *gbest* PSO (Kennedy & Eberhart, 1995). Particles update velocity
+and position via:
+
+$$v^{(i)}_{t+1} = w\, v^{(i)}_t + c_1 r_1 (p^{(i)} - x^{(i)}_t) + c_2 r_2 (g - x^{(i)}_t)$$
+
+$$x^{(i)}_{t+1} = x^{(i)}_t + v^{(i)}_{t+1}$$
+
+with $r_1, r_2 \sim \mathcal{U}(0,1)^D$. Positions are clamped to bounds
+and velocities are reflected and damped at the walls. The inertia weight
+$w$ can be linearly damped each step by `w_decay`.
+
+**Key parameters:** `n_particles` ($N$), `c1`, `c2`, `w`, `w_decay`,
+`max_no_improve`, `max_iterations`, `precision`, `seed`.
+
+`optimise()` extras: `initial_solutions` (warm-start seeds).
+
+```python
+from optim import PSOOptimiser
+
+pso = PSOOptimiser(n_particles=30, c1=1.5, c2=1.5, w=0.7,
+                   max_no_improve=200, seed=0)
+result = pso.optimise(lambda x: x[0]**2 + x[1]**2,
+                      bounds=[(-5, 5), (-5, 5)])
+```
+
+---
+
+## Ensembles — Three Families
+
+`EnsembleOptimiser` provides three composition strategies following the
+standard taxonomy of hybrid metaheuristics (Talbi, 2002). Each accepts
+either the canonical name or a backward-compatible alias.
+
+```python
+from optim import EnsembleOptimiser
+EnsembleOptimiser(optimisers, strategy='portfolio'  | 'best',
+                              # or 'pipeline'        | 'chain',
+                              # or 'multi_start'     | 'random_restart',
+                  n_restarts=5)
+```
+
+Every individual run is preserved in `result.run_results` (a list of
+`OptimisationResult`).
+
+### 1. Portfolio (alias `best`)
+
+Run every constituent **in parallel**, independently, and return the
+single best result. A *teamwork-style* ensemble that hedges across
+algorithms without coordination.
+
+```text
+for opt in optimisers:
+    r_opt <- opt.optimise(f, bounds, ...)
+return argmin_r r.best_value
+```
+
+Use when you do not know which algorithm fits the landscape best.
+
+```python
+from optim import (
+    GeneticOptimiser, PSOOptimiser,
+    DifferentialEvolutionOptimiser, EnsembleOptimiser,
+)
+
+ens = EnsembleOptimiser(
+    [GeneticOptimiser(seed=0),
+     PSOOptimiser(seed=0),
+     DifferentialEvolutionOptimiser(seed=0)],
+    strategy='portfolio',
+)
+result = ens.optimise(my_fn, bounds=my_bounds)
+```
+
+### 2. Pipeline (alias `chain`)
+
+Run constituents **sequentially**, warm-starting each one with the best
+solution of the previous. A *relay-style* ensemble — typically a fast
+global search hands off to a precise local refiner.
+
+```text
+warm <- None
+for opt in optimisers:
+    r <- opt.optimise(f, bounds, initial_solution=warm, ...)
+    warm <- r.best_solution
+return last r
+```
+
+Best for "explore then exploit" patterns.
+
+```python
+from optim import (
+    DifferentialEvolutionOptimiser, LocalSearchOptimiser,
+    EnsembleOptimiser,
+)
+
+ens = EnsembleOptimiser(
+    [DifferentialEvolutionOptimiser(max_generations=200, seed=0),
+     LocalSearchOptimiser(step_size=0.01, seed=0)],
+    strategy='pipeline',
+)
+```
+
+### 3. Multi-start (alias `random_restart`)
+
+Run the *same* optimiser `n_restarts` times, each from a fresh random
+initialisation, and return the best. Mitigates the sensitivity of
+stochastic algorithms to their starting point.
+
+```text
+for k in 1..n_restarts:
+    r_k <- optimisers[0].optimise(f, bounds, ...)
+return argmin_k r_k.best_value
+```
+
+Best for rugged landscapes where a single run is variable.
+
+```python
+from optim import SimulatedAnnealingOptimiser, EnsembleOptimiser
+
+ens = EnsembleOptimiser(
+    [SimulatedAnnealingOptimiser(initial_temp=1e3, max_epochs=2000, seed=0)],
+    strategy='multi_start', n_restarts=5,
+)
 ```
 
 ---
 
 ## OptimisationResult
 
-Every `optimise()` call returns an `OptimisationResult` (or `EnsembleResult`
-for `EnsembleOptimiser`).
+Every `optimise()` call returns an `OptimisationResult`. `EnsembleOptimiser`
+returns an `EnsembleResult` which extends it.
 
 ```python
-result.best_solution   # the best solution found (list, or Pareto archive for DBMOSA)
+result.best_solution   # best solution found (or Pareto archive for DBMOSA)
 result.best_value      # objective value of best_solution (float)
-result.history         # list of best values per iteration / epoch
-result.n_evaluations   # total number of objective-function calls (int)
+result.history         # running best per iteration / generation / epoch
+result.n_evaluations   # total objective-function evaluations
+# EnsembleResult only:
+result.run_results     # list[OptimisationResult] - one per run
 ```
 
-`EnsembleResult` additionally provides:
+For minimisation, `history` is monotonically non-increasing. For
+maximisation (via `maximise=True`), the values are reported in the
+original direction (non-decreasing).
 
-```python
-result.run_results     # list of OptimisationResult — one per constituent optimiser / restart
-```
+---
+
+## Encodings
+
+| Encoding | Solution type | Optimisers that support it |
+|---|---|---|
+| `real` | list of floats in `bounds` | RS, LS, TS, SA, DBMOSA, GA, DE, PSO |
+| `binary` | list of 0/1 ints (length `n_genes`) | RS, LS, GA |
+| `permutation` | list = permutation of `0..n_genes-1` | TS, GA |
+
+Provide `bounds` for real-valued problems, or `n_genes` for binary /
+permutation problems (or both — for binary, `len(bounds)` sets `n_genes`).
 
 ---
 
 ## Custom Operators
 
-Every optimiser accepts callable overrides for its key internal operators,
-letting you tailor the search to your problem without subclassing.
+Every optimiser exposes the operators that drive its search behaviour, so
+you can adapt the algorithm to a domain-specific encoding without
+subclassing.
 
 ```python
-# Custom crossover for GeneticOptimiser
-# Signature: (parent1: list, parent2: list) -> (child1, child2)
-def my_crossover(parent1, parent2):
-    mid = len(parent1) // 2
-    return parent1[:mid] + parent2[mid:], parent2[:mid] + parent1[mid:]
+# Genetic Algorithm: custom crossover and mutation
+# crossover_fn(parent1, parent2) -> (child1, child2)
+# mutation_fn(solution)          -> mutated_solution
+ga = GeneticOptimiser(crossover_fn=my_crossover, mutation_fn=my_mutation)
 
-ga = GeneticOptimiser(crossover_fn=my_crossover, encoding='real')
+# Local Search: custom neighbourhood
+# neighbourhood_fn(solution) -> list[solution]
+ls = LocalSearchOptimiser(neighbourhood_fn=my_nb)
 
-# Custom mutation for GeneticOptimiser
-# Signature: (solution: list) -> mutated_solution
-def my_mutation(solution):
-    import random, copy
-    s = copy.copy(solution)
-    i = random.randrange(len(s))
-    s[i] += random.gauss(0, 0.5)
-    return s
+# Tabu Search: custom neighbourhood (returns (neighbour, move_key) pairs)
+# neighbourhood_fn(solution) -> list[(solution, move_key)]
+ts = TabuSearchOptimiser(neighbourhood_fn=my_nb)
 
-ga = GeneticOptimiser(mutation_fn=my_mutation, encoding='real')
-
-# Custom move for SimulatedAnnealingOptimiser / DBMOSAOptimiser
-# Signature: (solution: list, bounds: list) -> new_solution
-def my_move(solution, bounds):
-    import random, copy
-    s = copy.copy(solution)
-    s[0] += random.gauss(0, 0.1)
-    return s
-
+# SA / DBMOSA: custom move generator
+# neighbour_fn(solution, bounds) -> new_solution
 sa = SimulatedAnnealingOptimiser(neighbour_fn=my_move)
 
-# Custom neighbourhood for LocalSearchOptimiser
-# Signature: (solution: list) -> list[solution]
-def my_neighbourhood(solution):
-    return [[solution[0] + 0.1], [solution[0] - 0.1]]
-
-ls = LocalSearchOptimiser(neighbourhood_fn=my_neighbourhood)
+# Random Search: custom sampler
+# sample_fn() -> solution
+rs = RandomSearchOptimiser(sample_fn=my_sampler)
 ```
+
+---
+
+## Adding Your Own Optimiser
+
+The standard makes it trivial to add a new optimiser. Subclass
+`BaseOptimiser`, implement `optimise`, return an `OptimisationResult`, and
+your class is immediately usable everywhere a built-in is — including
+inside any ensemble strategy.
+
+```python
+from optim import BaseOptimiser, OptimisationResult
+
+class MyOptimiser(BaseOptimiser):
+    def __init__(self, max_iterations=100, seed=None):
+        self.max_iterations = max_iterations
+        self.seed = seed
+
+    def optimise(self, objective_fn, bounds=None, *,
+                 maximise=False, initial_solution=None, **kwargs):
+        import random
+        if self.seed is not None:
+            random.seed(self.seed)
+        obj = self._wrap_objective(objective_fn, maximise)
+
+        x = initial_solution or [random.uniform(l, u) for l, u in bounds]
+        best, best_v = list(x), obj(x)
+        history, n_eval = [best_v], 1
+
+        for _ in range(self.max_iterations):
+            # ... your search step here ...
+            n_eval += 1
+            history.append(best_v)
+
+        return OptimisationResult(
+            best_solution=best,
+            best_value=-best_v if maximise else best_v,
+            history=[-v if maximise else v for v in history],
+            n_evaluations=n_eval,
+        )
+```
+
+Register it by short name to make it discoverable to config-driven code:
+
+```python
+from optim import OPTIMISERS
+OPTIMISERS["mine"] = MyOptimiser
+
+opt = OPTIMISERS["mine"](max_iterations=200, seed=0)
+result = opt.optimise(f, bounds=b)
+```
+
+Checklist before considering a new optimiser "library-quality":
+
+- [ ] `optimise(objective_fn, bounds=None, *, maximise=False, **kwargs)`
+- [ ] Uses `self._wrap_objective(...)` to handle `maximise`
+- [ ] Returns an `OptimisationResult`
+- [ ] Counts every objective call into `n_evaluations`
+- [ ] Records the running best in `history`
+- [ ] Supports `seed` for reproducibility
+- [ ] At least one budget cap and (where meaningful) a stagnation cap
+- [ ] Validates constructor arguments in `__init__`
+- [ ] Has tests in `tests/test_optimisers.py` against the sphere / Rosenbrock
+      benchmarks
 
 ---
 
 ## Parameter Tuning Tips
 
-### GeneticOptimiser
+### Genetic Algorithm
 
-- **`population_size`** — larger populations explore more of the space but are
-  slower per generation.  Start at 50 and scale up for high-dimensional or
-  multi-modal problems.
-- **`elite_size`** — keep at roughly 10–20 % of `population_size` to balance
+- **`population_size`** — larger populations explore more but are slower
+  per generation. Start at 50; scale up for high-dimensional or multi-modal
+  problems.
+- **`elite_size`** — roughly 10-20 % of `population_size` to balance
   selection pressure and diversity.
-- **`max_no_improve`** — the primary stopping rule.  Increase (e.g. 200–500)
-  if the algorithm terminates too early on hard problems.
-- **`encoding`** — use `'real'` for continuous problems, `'binary'` for
-  combinatorial problems with on/off decisions, and `'permutation'` for
-  sequencing / routing problems.
+- **`max_no_improve`** — primary stopping rule. Increase (200-500) on hard
+  problems.
+- **`encoding`** — `'real'` for continuous, `'binary'` for on/off feature
+  selection, `'permutation'` for sequencing / routing.
 
-### PSOOptimiser
+### Differential Evolution
 
-- **`w`** — values in [0.4, 0.9] work well.  Lower values favour exploitation;
-  higher values favour exploration.
-- **`c1` and `c2`** — balanced values of 1.5–2.0 are typical.  Increasing
-  `c1` makes particles follow their own best; increasing `c2` drives them
-  toward the global best.
-- **`w_decay`** — set slightly below 1.0 (e.g. 0.999) for linearly decreasing
-  inertia, which often improves convergence.
-- **`n_particles`** — 20–50 is a good starting range.  Increase for
-  high-dimensional or highly multi-modal problems.
+- **`F`** — usually in `[0.4, 1.0]`. Larger values increase exploration.
+- **`CR`** — `0.9` is a robust default; lower `CR` (e.g. `0.1-0.3`) suits
+  separable problems.
+- **`population_size`** — `5*D` to `10*D` is a common rule of thumb; never
+  below 4.
 
-### LocalSearchOptimiser
+### Particle Swarm Optimisation
 
-- **`step_size`** — controls neighbourhood granularity.  Large steps escape
-  local optima but may overshoot; small steps are precise but slow.  A value
-  of 1–5 % of the variable range is typical.
-- **`max_no_improve`** — set `None` to run until a strict local optimum is
-  found, or a small positive integer to allow a limited plateau.
-- Use `LocalSearchOptimiser` as a **final refinement stage** after a global
-  search (e.g. via `EnsembleOptimiser` with `strategy='chain'`).
+- **`w`** — values in `[0.4, 0.9]` work well. Lower favours exploitation;
+  higher favours exploration.
+- **`c1`, `c2`** — balanced values of `1.5-2.0` are typical.
+- **`w_decay`** — slightly below `1.0` (e.g. `0.999`) gives a linearly
+  decreasing inertia and usually improves convergence.
 
-### SimulatedAnnealingOptimiser
+### Local Search
+
+- **`step_size`** — 1-5 % of the variable range is typical. Large steps
+  escape local optima but may overshoot.
+- **`max_no_improve`** — `None` to run until a strict local optimum, or a
+  small integer to allow a limited plateau.
+- Best used as a **final refinement** inside a pipeline ensemble.
+
+### Tabu Search
+
+- **`tabu_tenure`** — usually `sqrt(N_neighbours)` to `2*sqrt(N_neighbours)`;
+  too small and the search cycles, too large and good moves are blocked.
+- **`step_size`** for real encoding — same logic as Local Search.
+
+### Simulated Annealing
 
 - **`initial_temp`** — set high enough that almost all moves are accepted
-  initially (acceptance probability ≈ 0.9).  A rough guide:
-  `initial_temp ≈ -Δf_avg / ln(0.9)` where Δf_avg is the average uphill move.
-- **`cooling_rate`** for `'Geometric'` schedule — values in [0.999, 0.99999]
-  work well.  Closer to 1.0 = slower cooling = better quality but more
-  evaluations.
-- **`epoch_type='Dynamic'`** is generally more efficient than `'Static'`
-  because the epoch length adapts to the acceptance rate.
-- **`termination='epoch'`** gives predictable runtime; `'temperature'` runs
-  until the landscape is frozen.
+  initially. Rule of thumb:
+  $T_0 \approx -\overline{\Delta f} / \ln(0.9)$.
+- **`cooling_rate`** for Geometric — values in `[0.999, 0.99999]`. Closer
+  to 1 = slower cooling = better quality but more evaluations.
+- **`epoch_type='Dynamic'`** is generally more efficient than `'Static'`.
 
-### DBMOSAOptimiser
+### DBMOSA
 
-- **`max_archive_size`** — limits memory and controls crowding.  Values of
-  50–200 work well for 2–3 objective problems.
-- **`diversity_method`** — start with `None` to get a quick Pareto front, then
-  try `'Histogram'` or `'NN'` if the front is too clustered.
-- Use higher `initial_temp` than single-objective SA because the dominance-
-  based ΔE is bounded in [−1, 1], so temperatures like `1e7`–`1e9` are
-  typical.
+- **`max_archive_size`** — 50-200 for 2-3 objective problems.
+- **`diversity_method`** — start with `None`; switch to `'Histogram'` or
+  `'NN'` if the front clusters.
+- Use higher `initial_temp` than single-objective SA: $\Delta E \in [-1, 1]$,
+  so `1e7` - `1e9` is typical.
 
 ### EnsembleOptimiser
 
-- **`strategy='best'`** is the safest choice when you are unsure which
-  algorithm will work best — it tries all of them and discards the worst.
-- **`strategy='chain'`** is most effective when the first optimiser is a
-  fast global explorer (PSO, GA) and the last is a precise local refiner (LS,
-  SA with low temperature).
-- **`strategy='random_restart'`** is useful when an algorithm is fast but
-  sensitive to initialisation (e.g. SA on a rugged landscape).
+- **`portfolio`** — safest default when the algorithm choice is unclear.
+- **`pipeline`** — best when the first optimiser is a global explorer and
+  the last is a precise local refiner.
+- **`multi_start`** — useful when an algorithm is fast but starting-point-
+  sensitive (e.g. SA on a rugged landscape).
 
 ---
-
-## Integration
-
-Every optimiser in `optim` follows the same contract, which makes them
-interchangeable in any downstream pipeline:
-
-```python
-class MyOptimiser(BaseOptimiser):
-    def optimise(self, objective_fn, bounds=None, *, maximise=False, **kwargs):
-        ...
-        return OptimisationResult(
-            best_solution=...,
-            best_value=...,
-            history=[...],
-            n_evaluations=...,
-        )
-```
-
-Uniform contract recap:
-
-- Subclass [`BaseOptimiser`][optim.base.BaseOptimiser] and implement
-  `optimise(objective_fn, bounds, *, maximise=False, **kwargs)`.
-- Accept arbitrary extra `**kwargs` so the optimiser plays nicely with
-  `EnsembleOptimiser`, which forwards per-optimiser kwargs.
-- Always return an [`OptimisationResult`][optim.base.OptimisationResult] (or a
-  subclass thereof).
-- Respect `maximise=True` — use `self._wrap_objective(objective_fn, maximise)`
-  from the base class to get a function that is always internally minimised.
-- Count every objective-function call into `n_evaluations`.
-
-Once a new optimiser follows that contract it can be:
-
-- Called directly with the same signature as every built-in optimiser.
-- Dropped into [`EnsembleOptimiser`][optim.ensemble.EnsembleOptimiser] for
-  `'best'`, `'chain'`, or `'random_restart'` composition.
-- Registered in the `OPTIMISERS` dictionary exported by the package so that
-  config-driven code can instantiate it by name:
-
-```python
-from optim import OPTIMISERS
-
-cls = OPTIMISERS["pso"]           # PSOOptimiser
-opt = cls(n_particles=20, seed=0)
-result = opt.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
-```
 
 ## Running Tests
 
 ```bash
 python -m pytest tests/ -v
 ```
+
+The suite includes 70+ tests covering every optimiser against the
+sphere / Rosenbrock / binary-sum / TSP benchmarks plus all ensemble
+strategies, alias resolution, and the registry.
+
+---
+
+## References
+
+- Bandyopadhyay, S., Saha, S., Maulik, U. & Deb, K. (2008). A Simulated
+  Annealing-Based Multiobjective Optimization Algorithm: AMOSA. *IEEE
+  Trans. Evolutionary Computation*, 12(3), 269-283.
+- Bergstra, J. & Bengio, Y. (2012). Random Search for Hyper-Parameter
+  Optimization. *JMLR*, 13, 281-305.
+- Glover, F. (1986). Future paths for integer programming and links to
+  artificial intelligence. *Computers & Operations Research*, 13(5),
+  533-549.
+- Kennedy, J. & Eberhart, R. (1995). Particle swarm optimization.
+  *Proceedings of ICNN'95*, Vol. 4, 1942-1948.
+- Storn, R. & Price, K. (1997). Differential Evolution — A Simple and
+  Efficient Heuristic for Global Optimization over Continuous Spaces.
+  *Journal of Global Optimization*, 11(4), 341-359.
+- Talbi, E.-G. (2002). A Taxonomy of Hybrid Metaheuristics. *Journal of
+  Heuristics*, 8(5), 541-564.

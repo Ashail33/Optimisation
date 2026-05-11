@@ -23,14 +23,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pytest
 
 from optim import (
+    OPTIMISERS,
     DBMOSAOptimiser,
+    DifferentialEvolutionOptimiser,
     EnsembleOptimiser,
     EnsembleResult,
     GeneticOptimiser,
     LocalSearchOptimiser,
     OptimisationResult,
     PSOOptimiser,
+    RandomSearchOptimiser,
     SimulatedAnnealingOptimiser,
+    TabuSearchOptimiser,
 )
 
 
@@ -520,3 +524,198 @@ class TestEnsembleOptimiser:
             optimiser_kwargs=[{}, {}]
         )
         assert isinstance(result, EnsembleResult)
+
+    # ----- Canonical strategy names + aliases -----
+
+    def test_canonical_strategy_names(self):
+        ga = self._make_ga()
+        pso = self._make_pso()
+        for name in ("portfolio", "pipeline", "multi_start"):
+            opts = [ga] if name == "multi_start" else [ga, pso]
+            ens = EnsembleOptimiser(opts, strategy=name, n_restarts=2)
+            result = ens.optimise(sphere, bounds=SPHERE_BOUNDS_2D)
+            assert isinstance(result, EnsembleResult)
+            assert ens.strategy == name
+
+    def test_aliases_resolve_to_canonical(self):
+        for alias, canonical in (
+            ("best", "portfolio"),
+            ("chain", "pipeline"),
+            ("random_restart", "multi_start"),
+        ):
+            ens = EnsembleOptimiser([self._make_ga()], strategy=alias, n_restarts=2)
+            assert ens.strategy == canonical
+
+
+# ---------------------------------------------------------------------------
+# TabuSearchOptimiser
+# ---------------------------------------------------------------------------
+
+class TestTabuSearchOptimiser:
+    def test_real_minimises_sphere(self):
+        ts = TabuSearchOptimiser(
+            step_size=0.2, tabu_tenure=8,
+            max_iterations=300, max_no_improve=80, seed=0
+        )
+        result = ts.optimise(sphere, bounds=SPHERE_BOUNDS_2D,
+                             initial_solution=[3.0, -2.0])
+        assert isinstance(result, OptimisationResult)
+        assert result.best_value < sphere([3.0, -2.0])
+        assert result.n_evaluations > 0
+
+    def test_permutation_tsp(self):
+        dist = [[0, 10, 20, 15], [10, 0, 12, 8], [20, 12, 0, 9], [15, 8, 9, 0]]
+
+        def tsp_obj(tour):
+            z = sum(dist[tour[i]][tour[i - 1]] for i in range(1, len(tour)))
+            z += dist[tour[0]][tour[-1]]
+            return z
+
+        ts = TabuSearchOptimiser(
+            encoding="permutation", tabu_tenure=4,
+            max_iterations=100, seed=1
+        )
+        result = ts.optimise(tsp_obj, n_genes=4)
+        assert sorted(result.best_solution) == [0, 1, 2, 3]
+
+    def test_maximise(self):
+        ts = TabuSearchOptimiser(
+            step_size=0.5, max_iterations=100, max_no_improve=30, seed=2
+        )
+        result = ts.optimise(sphere, bounds=SPHERE_BOUNDS_2D,
+                             initial_solution=[0.1, 0.1], maximise=True)
+        assert result.best_value > 0.0
+
+    def test_custom_neighbourhood(self):
+        def nb(sol):
+            return [
+                ([sol[0] + 0.1, sol[1]], (sol[0] + 0.1, sol[1])),
+                ([sol[0] - 0.1, sol[1]], (sol[0] - 0.1, sol[1])),
+            ]
+
+        ts = TabuSearchOptimiser(neighbourhood_fn=nb, max_iterations=50, seed=3)
+        result = ts.optimise(sphere, bounds=SPHERE_BOUNDS_2D,
+                             initial_solution=[2.0, 0.0])
+        assert isinstance(result, OptimisationResult)
+
+    def test_invalid_encoding(self):
+        with pytest.raises(ValueError):
+            TabuSearchOptimiser(encoding="binary")
+
+    def test_requires_bounds_for_real(self):
+        ts = TabuSearchOptimiser()
+        with pytest.raises(ValueError):
+            ts.optimise(sphere)
+
+
+# ---------------------------------------------------------------------------
+# DifferentialEvolutionOptimiser
+# ---------------------------------------------------------------------------
+
+class TestDifferentialEvolutionOptimiser:
+    def test_minimises_sphere(self):
+        de = DifferentialEvolutionOptimiser(
+            population_size=20, F=0.5, CR=0.9,
+            max_generations=200, max_no_improve=30, seed=0
+        )
+        result = de.optimise(sphere, bounds=SPHERE_BOUNDS_2D)
+        assert isinstance(result, OptimisationResult)
+        assert result.best_value < 1.0
+        assert result.n_evaluations > 0
+
+    def test_minimises_rosenbrock(self):
+        de = DifferentialEvolutionOptimiser(
+            population_size=30, F=0.7, CR=0.9,
+            max_generations=500, max_no_improve=80, seed=1
+        )
+        result = de.optimise(rosenbrock, bounds=[(-2.0, 2.0), (-2.0, 2.0)])
+        assert result.best_value < 1.0
+
+    def test_maximise(self):
+        de = DifferentialEvolutionOptimiser(
+            population_size=15, max_generations=100, max_no_improve=30, seed=2
+        )
+        result = de.optimise(sphere, bounds=SPHERE_BOUNDS_2D, maximise=True)
+        assert result.best_value > 20.0
+
+    def test_warm_start(self):
+        de = DifferentialEvolutionOptimiser(
+            population_size=10, max_generations=50, max_no_improve=20, seed=3
+        )
+        result = de.optimise(sphere, bounds=SPHERE_BOUNDS_2D,
+                             initial_solutions=[[0.5, 0.5], [-0.5, -0.5]])
+        assert isinstance(result, OptimisationResult)
+
+    def test_requires_bounds(self):
+        de = DifferentialEvolutionOptimiser()
+        with pytest.raises(ValueError):
+            de.optimise(sphere)
+
+    def test_invalid_population_size(self):
+        with pytest.raises(ValueError):
+            DifferentialEvolutionOptimiser(population_size=3)
+
+    def test_invalid_cr(self):
+        with pytest.raises(ValueError):
+            DifferentialEvolutionOptimiser(CR=1.5)
+
+
+# ---------------------------------------------------------------------------
+# RandomSearchOptimiser
+# ---------------------------------------------------------------------------
+
+class TestRandomSearchOptimiser:
+    def test_real_baseline(self):
+        rs = RandomSearchOptimiser(max_evaluations=200, seed=0)
+        result = rs.optimise(sphere, bounds=SPHERE_BOUNDS_2D)
+        assert isinstance(result, OptimisationResult)
+        assert result.n_evaluations == 200
+        assert result.best_value < sphere([5.0, 5.0])
+
+    def test_binary(self):
+        rs = RandomSearchOptimiser(encoding="binary", max_evaluations=100, seed=1)
+        result = rs.optimise(binary_sum, n_genes=10, maximise=True)
+        assert result.best_value >= 5
+        assert all(b in (0, 1) for b in result.best_solution)
+
+    def test_history_monotonic(self):
+        rs = RandomSearchOptimiser(max_evaluations=50, seed=2)
+        result = rs.optimise(sphere, bounds=SPHERE_BOUNDS_2D)
+        # The history (best so far) must never increase as more samples come in.
+        assert all(result.history[i] <= result.history[i - 1]
+                   for i in range(1, len(result.history)))
+
+    def test_custom_sampler(self):
+        import random as _random
+        sampler = lambda: [_random.uniform(-1, 1), _random.uniform(-1, 1)]
+        rs = RandomSearchOptimiser(sample_fn=sampler, max_evaluations=30, seed=3)
+        result = rs.optimise(sphere)
+        assert isinstance(result, OptimisationResult)
+
+    def test_requires_bounds_for_real(self):
+        rs = RandomSearchOptimiser(max_evaluations=10)
+        with pytest.raises(ValueError):
+            rs.optimise(sphere)
+
+    def test_invalid_encoding(self):
+        with pytest.raises(ValueError):
+            RandomSearchOptimiser(encoding="permutation")
+
+
+# ---------------------------------------------------------------------------
+# OPTIMISERS registry
+# ---------------------------------------------------------------------------
+
+class TestRegistry:
+    def test_registry_has_all_optimisers(self):
+        expected = {
+            "genetic", "pso", "de", "local_search", "tabu",
+            "sa", "dbmosa", "random_search", "ensemble",
+        }
+        assert set(OPTIMISERS.keys()) == expected
+
+    def test_registry_instantiation(self):
+        cls = OPTIMISERS["pso"]
+        opt = cls(n_particles=10, max_no_improve=10, max_iterations=20, seed=0)
+        result = opt.optimise(sphere, bounds=SPHERE_BOUNDS_2D)
+        assert isinstance(result, OptimisationResult)
