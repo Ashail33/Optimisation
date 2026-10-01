@@ -19,6 +19,9 @@ A generalised, extensible metaheuristic optimisation library in Python.
   - [SimulatedAnnealingOptimiser](#simulatedannealingoptimiser)
   - [DBMOSAOptimiser](#dbmosaoptimiser)
   - [EnsembleOptimiser](#ensembleoptimiser)
+- [Metaheuristic Catalogue](#metaheuristic-catalogue)
+- [Ensemble Types](#ensemble-types)
+- [Benchmarking](#benchmarking)
 - [OptimisationResult](#optimisationresult)
 - [Custom Operators](#custom-operators)
 - [Parameter Tuning Tips](#parameter-tuning-tips)
@@ -38,6 +41,14 @@ A generalised, extensible metaheuristic optimisation library in Python.
 | `DBMOSAOptimiser` | Dominance-Based Multi-Objective SA | continuous (multi-obj) |
 | `EnsembleOptimiser` | Combine optimisers (best / chain / restart) | any |
 
+It also includes a [catalogue of 15 more metaheuristics](#metaheuristic-catalogue):
+Differential Evolution, CMA-ES, Grey Wolf, Whale, Firefly, Cuckoo Search,
+Artificial Bee Colony, Bat, ACO_R, Harmony Search, TLBO, Jaya, Sine Cosine,
+Ant Colony (permutations) and Tabu Search. There are also
+[seven ensemble types](#ensemble-types): portfolio, relay chain, multi-start,
+island model, adaptive bandit / hyper-heuristic, memetic, and cooperative
+co-evolution.
+
 ---
 
 ## Installation
@@ -53,7 +64,7 @@ After install, verify the package is importable:
 
 ```python
 import optim
-print(optim.__version__)      # '0.1.0'
+print(optim.__version__)      # '0.2.0'
 print(optim.__all__)          # list of public classes
 ```
 
@@ -121,9 +132,9 @@ Provide `n_genes` to the `optimise()` call.
 
 | Problem type | Encoding | Optimiser(s) |
 |---|---|---|
-| Real-valued continuous variables | `'real'` | GA, PSO, LS, SA |
-| Bit strings / feature selection | `'binary'` | GA, LS |
-| Permutations / sequencing (e.g. TSP) | `'permutation'` | GA |
+| Real-valued continuous variables | `'real'` | GA, PSO, LS, SA, Tabu, and every continuous algorithm in the [catalogue](#metaheuristic-catalogue) |
+| Bit strings / feature selection | `'binary'` | GA, LS, Tabu |
+| Permutations / sequencing (e.g. TSP) | `'permutation'` | GA, Tabu, Ant Colony |
 | Multiple competing objectives | multi-objective | DBMOSA |
 
 ### Step 4 — Choose an optimiser
@@ -136,7 +147,11 @@ Provide `n_genes` to the `optimise()` call.
 | Rugged landscape, risk of local optima | `SimulatedAnnealingOptimiser` |
 | Multiple competing objectives | `DBMOSAOptimiser` |
 | Unsure which algorithm to use | `EnsembleOptimiser` (strategy `'best'`) |
-| Want global search then precise local refinement | `EnsembleOptimiser` (strategy `'chain'`) |
+| Want global search then precise local refinement | `EnsembleOptimiser` (strategy `'chain'`) or `MemeticOptimiser` |
+| Strong general-purpose continuous optimiser | `CMAESOptimiser`, `DifferentialEvolutionOptimiser` |
+| Don't know which algorithm suits the problem | `AdaptiveEnsembleOptimiser` (learns online) |
+| Multimodal landscape, want to keep diversity | `IslandModelOptimiser` |
+| Many (hundreds of) variables | `CooperativeCoevolutionOptimiser` |
 
 ---
 
@@ -515,6 +530,202 @@ result = ens.optimise(lambda x: x[0]**2 + x[1]**2, bounds=[(-5, 5), (-5, 5)])
 
 ---
 
+## Metaheuristic Catalogue
+
+`optim.algorithms` holds a catalogue of well-known metaheuristics, all
+importable from the top-level `optim` package.
+
+| Class | Algorithm | Family | Search space | Algorithm-specific parameters (defaults) |
+|---|---|---|---|---|
+| `DifferentialEvolutionOptimiser` | Differential Evolution | evolutionary | continuous | `strategy='rand/1'` (`'best/1'`, `'current-to-best/1'`, `'rand/2'`), `F=(0.5, 1.0)` (tuple = dither), `CR=0.9` |
+| `CMAESOptimiser` | CMA-ES | evolution strategy | continuous | `sigma0=0.3` (fraction of each range) |
+| `GreyWolfOptimiser` | Grey Wolf Optimizer | swarm | continuous | — |
+| `WhaleOptimiser` | Whale Optimization Algorithm | swarm | continuous | `spiral_b=1.0` |
+| `FireflyOptimiser` | Firefly Algorithm | swarm | continuous | `beta0=1`, `gamma=1`, `alpha=0.2`, `alpha_decay=0.97` |
+| `CuckooSearchOptimiser` | Cuckoo Search (Lévy flights) | swarm | continuous | `pa=0.25`, `step_scale=0.01`, `levy_beta=1.5` |
+| `ArtificialBeeColonyOptimiser` | Artificial Bee Colony | swarm | continuous | `limit=None` (→ `pop × dim / 2`) |
+| `BatOptimiser` | Bat Algorithm | swarm | continuous | `f_min=0`, `f_max=2`, `loudness=1`, `pulse_rate=0.5`, `alpha=gamma=0.9` |
+| `ACOROptimiser` | Ant colony for continuous domains (ACO_R) | swarm | continuous | `n_ants=None`, `q=0.2`, `xi=0.85` |
+| `HarmonySearchOptimiser` | Harmony Search | music-inspired | continuous | `hmcr=0.9`, `par=0.3`, `bandwidth=(0.1, 0.001)` |
+| `TLBOOptimiser` | Teaching–Learning-Based Optimization | human-inspired | continuous | — (parameter-free) |
+| `JayaOptimiser` | Jaya | human-inspired | continuous | — (parameter-free) |
+| `SineCosineOptimiser` | Sine Cosine Algorithm | math-inspired | continuous | `a=2.0` |
+| `AntColonyOptimiser` | Rank-based Ant System | swarm | permutation | `n_ants=20`, `alpha=1`, `beta=2`, `evaporation=0.1`; `optimise(..., heuristic=eta)` |
+| `TabuSearchOptimiser` | Tabu Search | trajectory | real / binary / permutation | `encoding`, `n_neighbours=30`, `tabu_tenure=10`, `step_size=0.1` |
+
+Each module's docstring cites the original paper.
+
+### Shared options for the continuous algorithms
+
+All continuous algorithms subclass
+[`PopulationOptimiser`](optim/population.py), so they share these options:
+
+| Constructor parameter | Default | Description |
+|---|---|---|
+| `population_size` | algorithm-specific | Individuals / particles / nests / food sources / archive size. |
+| `max_iterations` | `1000` | Iteration (generation) limit. |
+| `max_evaluations` | `None` | Objective-evaluation budget. Set this to compare algorithms fairly. At least one of the two limits is required. |
+| `max_no_improve` | `None` | Stop after this many iterations without improvement (by more than `tol`). |
+| `seed` | `None` | Seed for the algorithm's private `numpy.random.Generator`. It never touches global random state. |
+
+| `optimise()` parameter | Description |
+|---|---|
+| `initial_solutions` / `initial_solution` | Warm-start the population. |
+| `max_evaluations`, `max_iterations` | Override the budget for one call. |
+| `callback(iteration, best_solution, best_value)` | Called every iteration. Return `True` to stop. |
+
+Results include the final `population` (best first). The ensembles use it
+to pass a whole population between algorithms.
+
+Algorithms whose coefficients decay over the run (GWO, WOA, SCA, Harmony
+Search bandwidth) schedule them on the fraction of the budget used. Set the
+budget you actually intend to spend.
+
+```python
+from optim import DifferentialEvolutionOptimiser, CMAESOptimiser, GreyWolfOptimiser
+from optim.benchmarks import rastrigin
+
+bounds = [(-5.12, 5.12)] * 10
+for opt in (DifferentialEvolutionOptimiser(strategy="current-to-best/1"),
+            CMAESOptimiser(sigma0=0.3),
+            GreyWolfOptimiser(population_size=40)):
+    r = opt.optimise(rastrigin, bounds, max_evaluations=20_000, max_iterations=None)
+    print(type(opt).__name__, r.best_value)
+```
+
+### Discrete examples
+
+```python
+import numpy as np
+from optim import AntColonyOptimiser, TabuSearchOptimiser
+
+pts = np.random.default_rng(0).random((20, 2))
+dist = np.linalg.norm(pts[:, None] - pts[None], axis=2)
+tour_length = lambda t: sum(dist[t[i - 1], t[i]] for i in range(len(t)))
+
+# ACO with a 1/distance heuristic
+with np.errstate(divide="ignore"):
+    eta = np.where(dist > 0, 1 / dist, 0)
+aco = AntColonyOptimiser(n_ants=30, max_iterations=200, seed=0)
+print(aco.optimise(tour_length, n_genes=20, heuristic=eta).best_value)
+
+# Tabu search over swaps
+ts = TabuSearchOptimiser(encoding="permutation", tabu_tenure=15, max_iterations=2000)
+print(ts.optimise(tour_length, n_genes=20).best_value)
+
+# Tabu search on bit strings (feature selection, knapsack, ...)
+ts = TabuSearchOptimiser(encoding="binary")
+print(ts.optimise(lambda b: sum(b), n_genes=30, maximise=True).best_value)
+```
+
+---
+
+## Ensemble Types
+
+`optim.ensembles` provides one class per standard way of combining
+optimisers. Every ensemble is itself a `BaseOptimiser`, so ensembles can be
+nested (for example, memetic algorithms on the islands of an island model).
+
+| Ensemble type | Class | How the optimisers interact |
+|---|---|---|
+| Portfolio (best-of) | `EnsembleOptimiser(strategy='best')` | Independent runs; keep the best. |
+| High-level relay hybrid | `EnsembleOptimiser(strategy='chain')` | Run in sequence, handing over the best solution once. |
+| Multi-start | `EnsembleOptimiser(strategy='random_restart')` | Restart one algorithm several times. |
+| Island model | `IslandModelOptimiser` | Each algorithm evolves its own island. Elites migrate between islands every epoch (`'ring'`, `'fully_connected'`, `'star'`, `'random'`). |
+| Adaptive / hyper-heuristic | `AdaptiveEnsembleOptimiser` | A multi-armed bandit (`'ucb'`, `'epsilon_greedy'`, `'probability_matching'`, `'round_robin'`) chooses which algorithm runs each round, warm-started from a shared pool. It rewards algorithms that improve the best value. |
+| Memetic (low-level hybrid) | `MemeticOptimiser` | Global search and local refinement of the top `n_refine` elites alternate. Refined solutions go back into the population. |
+| Cooperative co-evolution | `CooperativeCoevolutionOptimiser` | Splits the variables into groups and optimises each group with the others held at the best-so-far context vector. Suits high-dimensional, (nearly) separable problems. |
+
+### Budgets and warm starts
+
+Ensembles count every objective call and take a total `max_evaluations`.
+That budget is split across epochs, rounds or groups (override with
+`epoch_evaluations`, `round_evaluations`, `group_evaluations`,
+`global_evaluations` / `local_evaluations`).
+
+For each call, the ensemble passes warm-start solutions and a budget only if
+the constituent accepts them (`initial_solutions` → `initial_solution`;
+`max_evaluations`). That means **any** optimiser works in any ensemble.
+Optimisers without budget control (GA, PSO, LS, SA) run to their own
+stopping criteria, so give them short limits when you use them inside
+epoch-based ensembles.
+
+When an ensemble has a `seed`, each constituent run gets a different seed
+derived from it. Repeated epochs then explore differently, and the whole run
+is still reproducible.
+
+### Examples
+
+```python
+from optim import (
+    AdaptiveEnsembleOptimiser, CMAESOptimiser, CooperativeCoevolutionOptimiser,
+    DifferentialEvolutionOptimiser, GreyWolfOptimiser, IslandModelOptimiser,
+    MemeticOptimiser, TabuSearchOptimiser,
+)
+from optim.benchmarks import rastrigin
+
+bounds = [(-5.12, 5.12)] * 20
+algos = [DifferentialEvolutionOptimiser(), CMAESOptimiser(), GreyWolfOptimiser()]
+
+# Island model: three heterogeneous islands, best 2 migrate around a ring
+island = IslandModelOptimiser(algos, n_epochs=10, topology="ring",
+                              migration_size=2, max_evaluations=50_000, seed=0)
+r = island.optimise(rastrigin, bounds)
+print(r.best_value, r.info["island_best_values"])
+
+# Adaptive selection: UCB bandit learns which algorithm pays off
+adaptive = AdaptiveEnsembleOptimiser(algos, n_rounds=25, selection="ucb",
+                                     max_evaluations=50_000, seed=0)
+r = adaptive.optimise(rastrigin, bounds)
+print(r.best_value, r.info["selection_counts"])
+
+# Memetic: DE explores, Tabu Search refines the 3 best each generation
+memetic = MemeticOptimiser(DifferentialEvolutionOptimiser(),
+                           TabuSearchOptimiser(step_size=0.02),
+                           n_generations=10, n_refine=3, max_evaluations=50_000)
+print(memetic.optimise(rastrigin, bounds).best_value)
+
+# Cooperative co-evolution: 5 random variable groups, re-shuffled each cycle
+coop = CooperativeCoevolutionOptimiser(DifferentialEvolutionOptimiser(), n_groups=5,
+                                       grouping="random", max_evaluations=50_000)
+print(coop.optimise(rastrigin, bounds).best_value)
+```
+
+---
+
+## Benchmarking
+
+`optim.benchmarks` provides standard test functions (`sphere`, `rosenbrock`,
+`rastrigin`, `ackley`, `griewank`, `schwefel`, `levy`, `zakharov`,
+`styblinski_tang`), stored in the `BENCHMARKS` registry with their usual
+bounds and known optima. It also provides a harness for comparing algorithms
+and ensembles:
+
+```python
+from optim import DifferentialEvolutionOptimiser, GreyWolfOptimiser, IslandModelOptimiser
+from optim.benchmarks import compare, format_table
+
+rows = compare(
+    {"DE": DifferentialEvolutionOptimiser(max_iterations=None),
+     "GWO": GreyWolfOptimiser(max_iterations=None),
+     "Island": IslandModelOptimiser([DifferentialEvolutionOptimiser(), GreyWolfOptimiser()],
+                                    max_evaluations=20_000)},
+    problems=["sphere", "rastrigin", "ackley"], dim=10, n_runs=5, max_evaluations=20_000,
+)
+print(format_table(rows))
+```
+
+`python examples/compare_algorithms.py` runs every algorithm and ensemble
+type side by side.
+
+> **Caveat:** several newer swarm algorithms (GWO, WOA, SCA) are known to
+> be biased towards the centre of the search box. On benchmarks whose optimum
+> sits at the origin they look better than they will on real problems.
+> Judge them on your own objective, or on a shifted function such as
+> `lambda x: rastrigin([v - 1.3 for v in x])`.
+
+---
+
 ## OptimisationResult
 
 Every `optimise()` call returns an `OptimisationResult` (or `EnsembleResult`
@@ -525,12 +736,15 @@ result.best_solution   # the best solution found (list, or Pareto archive for DB
 result.best_value      # objective value of best_solution (float)
 result.history         # list of best values per iteration / epoch
 result.n_evaluations   # total number of objective-function calls (int)
+result.population      # final population, best first (population-based optimisers; else None)
+result.population_values
 ```
 
 `EnsembleResult` additionally provides:
 
 ```python
 result.run_results     # list of OptimisationResult — one per constituent optimiser / restart
+result.info            # strategy diagnostics, e.g. selection_counts (adaptive), island_best_values (island)
 ```
 
 ---
@@ -680,6 +894,31 @@ Uniform contract recap:
 - Respect `maximise=True` — use `self._wrap_objective(objective_fn, maximise)`
   from the base class to get a function that is always internally minimised.
 - Count every objective-function call into `n_evaluations`.
+- Optionally accept `initial_solutions` / `initial_solution` and
+  `max_evaluations` in `optimise()`. The ensembles detect these and use them
+  for warm starts and budget control.
+
+### Adding a new continuous metaheuristic
+
+Subclass [`PopulationOptimiser`](optim/population.py) and implement `_step`
+(plus `_initialise` if the algorithm needs extra state). Bounds, budgets,
+seeding, warm starts, history, `maximise` and the result object are all
+handled for you:
+
+```python
+import numpy as np
+from optim import PopulationOptimiser
+
+class RandomWalkOptimiser(PopulationOptimiser):
+    def __init__(self, step=0.1, population_size=None, **kwargs):
+        self.step = step
+        super().__init__(population_size=population_size, **kwargs)
+
+    def _step(self, problem, state, rng):
+        # state.X: (n, d) positions, state.F: (n,) values; problem.evaluate counts evals
+        cand = problem.clip(state.X + rng.normal(0, self.step, state.X.shape) * problem.span)
+        self._greedy_replace(state, cand, problem.evaluate(cand))
+```
 
 Once a new optimiser follows that contract it can be:
 

@@ -40,9 +40,13 @@ class EnsembleResult(OptimisationResult):
     ----------
     run_results : list of OptimisationResult
         Individual results from each optimiser (or restart).
+    info : dict
+        Strategy-specific diagnostics (e.g. which algorithm an adaptive
+        ensemble selected each round, or each island's best value).
     """
 
     run_results: List[OptimisationResult] = field(default_factory=list)
+    info: Dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
