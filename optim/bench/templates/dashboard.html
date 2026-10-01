@@ -89,7 +89,7 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin-
 pre { background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 12px; }
 .empty { color: var(--muted); padding: 24px 0; text-align: center; }
 [hidden] { display: none !important; }
-@media (min-width: 720px) { .filters { position: sticky; top: 0; z-index: 5; } }
+@media (min-width: 720px) { .filters { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; } }
 </style>
 </head>
 <body>
@@ -206,7 +206,6 @@ pre { background: var(--raised); border: 1px solid var(--border); border-radius:
   // ---------------- header ----------------
   $("title").textContent = "Optimiser benchmark — " + (D.name || "run");
   $("subtitle").textContent = [D.created && ("run " + D.created.replace("T", " ")), D.elapsed_s != null && (D.elapsed_s + " s")].filter(Boolean).join(" · ");
-  document.title = "Benchmark " + (D.name || "");
   const problems = Object.keys(D.problems || {});
   const fr = D.friedman || {};
   $("kpis").innerHTML = [

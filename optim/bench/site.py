@@ -28,7 +28,7 @@ def build_site(run_dir: Union[str, Path], out: Union[str, Path], *, refresh: boo
 
     template = resources.files("optim.bench").joinpath("templates/dashboard.html").read_text()
     payload = json.dumps(summary, separators=(",", ":")).replace("</", "<\\/")
-    title = f"Benchmark {summary.get('name') or ''}".strip()
+    title = f"{(summary.get('name') or 'Run').replace('_', ' ').title()} Optimiser Benchmark"
     html = template.replace("__TITLE__", title).replace("__DATA__", payload)
 
     out = Path(out)
