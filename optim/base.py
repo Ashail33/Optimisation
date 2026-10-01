@@ -23,12 +23,21 @@ class OptimisationResult:
         Best objective value recorded at each iteration.
     n_evaluations : int
         Total number of objective-function evaluations performed.
+    population : list, optional
+        Final population, sorted best-first, for population-based optimisers
+        that expose it (``None`` otherwise).  Ensembles use it to hand a
+        whole population from one algorithm to the next.
+    population_values : list of float, optional
+        Objective values matching ``population`` (same orientation as
+        ``best_value``).
     """
 
     best_solution: Any
     best_value: float
     history: List[float] = field(default_factory=list)
     n_evaluations: int = 0
+    population: Optional[List[Any]] = None
+    population_values: Optional[List[float]] = None
 
     def __repr__(self) -> str:  # pragma: no cover
         return (
