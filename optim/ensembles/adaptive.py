@@ -35,7 +35,7 @@ import numpy as np
 
 from ..base import BaseOptimiser, OptimisationResult
 from ..ensemble import EnsembleResult
-from ._common import CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
+from ._common import Budget, CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
 
 _RULES = ("ucb", "epsilon_greedy", "probability_matching", "round_robin")
 _DEFAULT_EXPLORATION = {
@@ -108,17 +108,24 @@ class AdaptiveEnsembleOptimiser(BaseOptimiser):
         maximise: bool = False,
         initial_solutions: Optional[Sequence[Any]] = None,
         optimiser_kwargs: Optional[List[Dict[str, Any]]] = None,
+        max_evaluations: Optional[int] = None,
         **kwargs: Any,
     ) -> EnsembleResult:
-        """Run the adaptive ensemble."""
+        """Run the adaptive ensemble.
+
+        ``max_evaluations`` overrides the constructor's total budget; other
+        keyword arguments are forwarded to every member.
+        """
         rng = np.random.default_rng(self.seed)
         objective = CountingObjective(objective_fn, maximise)
+        total = self.max_evaluations if max_evaluations is None else max_evaluations
+        limit = Budget(total, objective)
         pool = SolutionPool(self.pool_size)
         k = len(self.optimisers)
         counts = np.zeros(k, dtype=int)
         reward_sum = np.zeros(k)
         quality = np.full(k, 1.0)  # optimistic start for probability matching
-        budget = self.round_evaluations or split_budget(self.max_evaluations, self.n_rounds)
+        budget = self.round_evaluations or split_budget(total, self.n_rounds)
 
         run_results: List[OptimisationResult] = []
         selections: List[int] = []
@@ -126,24 +133,19 @@ class AdaptiveEnsembleOptimiser(BaseOptimiser):
         history: List[float] = []
 
         for round_ in range(self.n_rounds):
-            if self.max_evaluations is not None and objective.n_evaluations >= self.max_evaluations:
+            if limit.spent:
                 break
             arm = self._select(round_, counts, reward_sum, quality, rng)
             before = pool.best_value if len(pool) else math.inf
             seeds = pool.solutions or (list(initial_solutions) if initial_solutions else None)
-            cap = budget
-            if self.max_evaluations is not None:
-                remaining = self.max_evaluations - objective.n_evaluations
-                cap = remaining if cap is None else min(cap, remaining)
-
             result = run_optimiser(
                 self.optimisers[arm],
                 objective,
                 bounds,
                 population=seeds,
-                max_evaluations=cap,
+                max_evaluations=limit.cap(budget),
                 seed=derive_seed(rng),
-                extra_kwargs=optimiser_kwargs[arm] if optimiser_kwargs else None,
+                extra_kwargs={**kwargs, **(optimiser_kwargs[arm] if optimiser_kwargs else {})},
             )
             pool.add_result(result)
             reward = self._reward(before, pool.best_value)

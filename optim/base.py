@@ -6,7 +6,43 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+
+@dataclass
+class Step:
+    """One step of an iterative optimiser (the state-action layer).
+
+    A trajectory of these is a ``(state, action, cost, delta_cost)`` sequence
+    that downstream models (value / policy models, learned hyper-heuristics)
+    can learn from.  Only ``step_idx`` and ``cost`` are required.
+
+    Fields
+    ------
+    step_idx : int
+        Iteration counter within the run (starts at 1; 0 is the initial
+        population).
+    cost : float
+        Best-so-far objective in *minimisation* orientation (``-profit``
+        when maximising), so lower is always better.
+    delta_cost : float, optional
+        Change in ``cost`` caused by this step (``<= 0``); a reward signal.
+    accepted : bool
+        Whether the step improved the best-so-far solution.
+    action : dict
+        What the algorithm did, e.g. ``{"type": "de/rand/1", "F": 0.73}``.
+    state : dict
+        Compact numeric summary of the search state after the step
+        (best / mean value, population diversity, evaluations used, plus
+        algorithm-specific quantities such as CMA-ES's step size).
+    """
+
+    step_idx: int
+    cost: float
+    delta_cost: Optional[float] = None
+    accepted: bool = True
+    action: Dict[str, Any] = field(default_factory=dict)
+    state: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -30,6 +66,9 @@ class OptimisationResult:
     population_values : list of float, optional
         Objective values matching ``population`` (same orientation as
         ``best_value``).
+    trajectory : list of Step, optional
+        Per-iteration state-action record, when the optimiser was asked to
+        record one (``optimise(..., record_trajectory=True)``).
     """
 
     best_solution: Any
@@ -38,6 +77,7 @@ class OptimisationResult:
     n_evaluations: int = 0
     population: Optional[List[Any]] = None
     population_values: Optional[List[float]] = None
+    trajectory: Optional[List[Step]] = None
 
     def __repr__(self) -> str:  # pragma: no cover
         return (

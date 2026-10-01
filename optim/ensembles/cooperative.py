@@ -26,7 +26,7 @@ import numpy as np
 
 from ..base import BaseOptimiser, OptimisationResult
 from ..ensemble import EnsembleResult
-from ._common import CountingObjective, derive_seed, run_optimiser, split_budget
+from ._common import Budget, CountingObjective, derive_seed, run_optimiser, split_budget
 
 
 class CooperativeCoevolutionOptimiser(BaseOptimiser):
@@ -85,19 +85,25 @@ class CooperativeCoevolutionOptimiser(BaseOptimiser):
         initial_solution: Optional[Sequence[float]] = None,
         initial_solutions: Optional[Sequence[Sequence[float]]] = None,
         optimiser_kwargs: Optional[List[Dict[str, Any]]] = None,
+        max_evaluations: Optional[int] = None,
         **kwargs: Any,
     ) -> EnsembleResult:
-        """Run cooperative co-evolution (continuous ``bounds`` required)."""
+        """Run cooperative co-evolution (continuous ``bounds`` required).
+
+        ``max_evaluations`` overrides the constructor's total budget.
+        """
         if bounds is None:
             raise ValueError("bounds must be provided")
         rng = np.random.default_rng(self.seed)
         objective = CountingObjective(objective_fn, maximise)
+        total = self.max_evaluations if max_evaluations is None else max_evaluations
+        limit = Budget(total, objective)
         dim = len(bounds)
         lo = np.array([b[0] for b in bounds], dtype=float)
         hi = np.array([b[1] for b in bounds], dtype=float)
         n_groups = max(1, min(dim, self.n_groups or min(dim, 4)))
         budget = self.group_evaluations or split_budget(
-            self.max_evaluations, self.n_cycles * n_groups
+            total, self.n_cycles * n_groups
         )
 
         if initial_solution is None and initial_solutions:
@@ -115,7 +121,7 @@ class CooperativeCoevolutionOptimiser(BaseOptimiser):
             if self.grouping == "random":
                 groups = np.array_split(rng.permutation(dim), n_groups)
             for g, idx in enumerate(groups):
-                if self.max_evaluations is not None and objective.n_evaluations >= self.max_evaluations:
+                if limit.spent:
                     break
                 frozen = context.copy()
 
@@ -124,17 +130,13 @@ class CooperativeCoevolutionOptimiser(BaseOptimiser):
                     x[idx] = y
                     return objective(x.tolist())
 
-                cap = budget
-                if self.max_evaluations is not None:
-                    remaining = self.max_evaluations - objective.n_evaluations
-                    cap = remaining if cap is None else min(cap, remaining)
                 k = g % len(self.optimisers)
                 result = run_optimiser(
                     self.optimisers[k],
                     sub_objective,
                     [tuple(bounds[j]) for j in idx],
                     population=[context[idx].tolist()],
-                    max_evaluations=cap,
+                    max_evaluations=limit.cap(budget),
                     seed=derive_seed(rng),
                     extra_kwargs=optimiser_kwargs[k] if optimiser_kwargs else None,
                 )

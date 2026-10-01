@@ -1,0 +1,42 @@
+# Ensemble taxonomy: every ensemble type over the same three members,
+# against the members on their own.
+name: ensembles
+budget: {per_dim: 1000}
+repeats: 5
+seed: 4
+n_jobs: 4
+problems:
+  - family: rastrigin
+    dim: 10
+    params: {rotate: [false, true]}
+  - {family: rosenbrock, dim: 10}
+  - {family: ackley, dim: 10}
+  - {family: schwefel, dim: 10}
+  - {family: ellipsoid, dim: 10, params: {rotate: true}}
+  - {family: pricing, dim: 10}
+  - {family: portfolio, dim: 15, params: {cardinality: 5}}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: CMA-ES, entry: cmaes}
+  - {name: GWO, entry: gwo}
+  - name: Portfolio (HTH)
+    entry: portfolio
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: gwo}]}
+  - name: Relay DE→CMA-ES (HRH)
+    entry: relay
+    params: {optimisers: [{entry: de, params: {max_evaluations: 4000, max_iterations: null}}, {entry: cmaes, params: {sigma0: 0.1}}]}
+  - name: Multi-start CMA-ES (HTH)
+    entry: multistart
+    params: {optimisers: [{entry: cmaes, params: {max_evaluations: 2000, max_iterations: null}}], n_restarts: 10}
+  - name: Island ring (HTH)
+    entry: island
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: gwo}], n_epochs: 10}
+  - name: Adaptive UCB (HRH)
+    entry: adaptive
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: gwo}], n_rounds: 20}
+  - name: Memetic DE+CMA-ES (LRH)
+    entry: memetic
+    params: {global_optimiser: {entry: de}, local_optimiser: {entry: cmaes, params: {sigma0: 0.05}}}
+  - name: Co-evolution DE (LTH)
+    entry: cooperative
+    params: {optimisers: [{entry: de}], n_groups: 3}

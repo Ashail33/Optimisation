@@ -1,0 +1,59 @@
+# The run behind docs/dashboard: a cross-section of every problem category,
+# single algorithms and every ensemble type.
+name: demo
+budget: {per_dim: 500}
+repeats: 3
+seed: 7
+n_jobs: 4
+problems:
+  - {family: sphere, dim: 10}
+  - {family: ellipsoid, dim: 10, params: {rotate: true}}
+  - {family: rosenbrock, dim: 10}
+  - family: rastrigin
+    dim: 10
+    params: {rotate: [false, true]}
+  - {family: ackley, dim: 10}
+  - {family: schwefel, dim: 10}
+  - {family: step, dim: 10}
+  - {family: sphere, dim: 10, params: {noise: 0.1}}
+  - {family: tsp, dim: 20, params: {layout: [uniform, clustered]}}
+  - {family: knapsack, dim: 30, params: {correlation: [uncorrelated, strong]}}
+  - {family: trap, dim: 30}
+  - {family: nk, dim: 14, params: {k: 4}}
+  - {family: maxcut, dim: 14}
+  - {family: production_planning, dim: 10}
+  - {family: marketing_budget, dim: 10}
+  - {family: pricing, dim: 10}
+  - {family: portfolio, dim: 12, params: {cardinality: [null, 4]}}
+  - {family: newsvendor, dim: 10}
+  - {family: fixed_charge, dim: 8}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: CMA-ES, entry: cmaes}
+  - {name: PSO, entry: pso, params: {max_iterations: null}}
+  - {name: GWO, entry: gwo}
+  - {name: WOA, entry: woa}
+  - {name: ABC, entry: abc}
+  - {name: Cuckoo, entry: cuckoo}
+  - {name: TLBO, entry: tlbo}
+  - {name: Jaya, entry: jaya}
+  - {name: Harmony, entry: harmony}
+  - {name: SCA, entry: sca}
+  - {name: GA, entry: genetic}
+  - {name: Tabu, entry: tabu}
+  - {name: ACO, entry: aco}
+  - name: Portfolio
+    entry: portfolio
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: abc}]}
+  - name: Island
+    entry: island
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: abc}], n_epochs: 8}
+  - name: Adaptive UCB
+    entry: adaptive
+    params: {optimisers: [{entry: de}, {entry: cmaes}, {entry: abc}], n_rounds: 16}
+  - name: Memetic DE+CMA-ES
+    entry: memetic
+    params: {global_optimiser: {entry: de}, local_optimiser: {entry: cmaes, params: {sigma0: 0.05}}}
+  - name: Co-evolution
+    entry: cooperative
+    params: {optimisers: [{entry: de}], n_groups: 3}

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "optim"
-version = "0.2.0"
-description = "A generalised metaheuristic optimisation library supporting Genetic Algorithms, PSO, Local Search, Simulated Annealing, DBMOSA, and Ensemble Optimisers."
+version = "0.3.0"
+description = "Metaheuristic optimisation library: 20 optimisers, 7 ensemble types, a problem suite with profit functions, and a benchmark harness with dashboard."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -31,9 +31,22 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# Benchmark harness (optim.bench): tables, YAML configs, statistics, resources.
+bench = [
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+    "scipy>=1.10",
+    "psutil>=5.9",
+]
+
+[project.scripts]
+optbench = "optim.bench.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["optim*"]
+
+[tool.setuptools.package-data]
+"optim.bench" = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

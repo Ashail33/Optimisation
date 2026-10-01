@@ -25,7 +25,7 @@ import numpy as np
 
 from ..base import BaseOptimiser, OptimisationResult
 from ..ensemble import EnsembleResult
-from ._common import CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
+from ._common import Budget, CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
 
 
 class MemeticOptimiser(BaseOptimiser):
@@ -84,26 +84,33 @@ class MemeticOptimiser(BaseOptimiser):
         *,
         maximise: bool = False,
         initial_solutions: Optional[Sequence[Any]] = None,
+        max_evaluations: Optional[int] = None,
         **kwargs: Any,
     ) -> EnsembleResult:
-        """Run the memetic algorithm.  Extra ``kwargs`` go to both optimisers."""
+        """Run the memetic algorithm.
+
+        ``max_evaluations`` overrides the constructor's total budget; extra
+        ``kwargs`` go to both optimisers.
+        """
         rng = np.random.default_rng(self.seed)
         objective = CountingObjective(objective_fn, maximise)
+        total = self.max_evaluations if max_evaluations is None else max_evaluations
+        limit = Budget(total, objective)
         pool = SolutionPool(self.pool_size)
-        half = None if self.max_evaluations is None else self.max_evaluations // 2
+        half = None if total is None else total // 2
         g_budget = self.global_evaluations or split_budget(half, self.n_generations)
         l_budget = self.local_evaluations or split_budget(half, self.n_generations * self.n_refine)
 
         run_results: List[OptimisationResult] = []
         history: List[float] = []
         for _ in range(self.n_generations):
-            if self._spent(objective):
+            if limit.spent:
                 break
             seeds = pool.solutions or (list(initial_solutions) if initial_solutions else None)
             result = run_optimiser(
                 self.global_optimiser, objective, bounds,
                 population=seeds,
-                max_evaluations=self._cap(g_budget, objective),
+                max_evaluations=limit.cap(g_budget),
                 seed=derive_seed(rng),
                 extra_kwargs=kwargs,
             )
@@ -112,12 +119,12 @@ class MemeticOptimiser(BaseOptimiser):
 
             elites, _ = pool.top(self.n_refine)
             for elite in elites:
-                if self._spent(objective):
+                if limit.spent:
                     break
                 refined = run_optimiser(
                     self.local_optimiser, objective, bounds,
                     population=[elite],
-                    max_evaluations=self._cap(l_budget, objective),
+                    max_evaluations=limit.cap(l_budget),
                     seed=derive_seed(rng),
                     extra_kwargs=kwargs,
                 )
@@ -135,12 +142,3 @@ class MemeticOptimiser(BaseOptimiser):
             population_values=[sign * v for v in pool.values],
             run_results=run_results,
         )
-
-    def _spent(self, objective: CountingObjective) -> bool:
-        return self.max_evaluations is not None and objective.n_evaluations >= self.max_evaluations
-
-    def _cap(self, budget: Optional[int], objective: CountingObjective) -> Optional[int]:
-        if self.max_evaluations is None:
-            return budget
-        remaining = self.max_evaluations - objective.n_evaluations
-        return remaining if budget is None else min(budget, remaining)

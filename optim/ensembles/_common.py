@@ -117,6 +117,25 @@ class SolutionPool:
         return self.values[0]
 
 
+class Budget:
+    """Total evaluation budget of one ensemble run (``None`` = unlimited)."""
+
+    def __init__(self, total: Optional[int], objective: CountingObjective) -> None:
+        self.total = total
+        self.objective = objective
+
+    @property
+    def spent(self) -> bool:
+        return self.total is not None and self.objective.n_evaluations >= self.total
+
+    def cap(self, per_call: Optional[int]) -> Optional[int]:
+        """Budget for the next constituent call: ``per_call`` limited to what is left."""
+        if self.total is None:
+            return per_call
+        remaining = self.total - self.objective.n_evaluations
+        return remaining if per_call is None else min(per_call, remaining)
+
+
 def derive_seed(rng: np.random.Generator) -> int:
     return int(rng.integers(0, 2 ** 31 - 1))
 

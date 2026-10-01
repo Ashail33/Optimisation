@@ -75,6 +75,7 @@ class DifferentialEvolutionOptimiser(PopulationOptimiser):
         X, F = state.X, state.F
         n, d = X.shape
         weight = rng.uniform(*self.F) if isinstance(self.F, tuple) else self.F
+        state.action = {"type": f"de/{self.strategy}/bin", "F": float(weight), "CR": self.CR}
         r = self._random_others(n, rng, k=5 if self.strategy == "rand/2" else 3)
         best = X[np.argmin(F)]
 

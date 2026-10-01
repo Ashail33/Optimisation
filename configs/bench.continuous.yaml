@@ -1,0 +1,49 @@
+# Continuous landscapes: every single continuous metaheuristic, shifted
+# optima, with and without rotation, two dimensions.
+name: continuous
+budget: {per_dim: 1000}
+repeats: 5
+seed: 1
+n_jobs: 4
+problems:
+  - family: sphere
+    dim: [5, 20]
+  - family: ellipsoid
+    dim: [5, 20]
+    params: {rotate: [false, true]}
+  - family: rosenbrock
+    dim: [5, 20]
+  - family: rastrigin
+    dim: [5, 20]
+    params: {rotate: [false, true]}
+  - family: ackley
+    dim: [5, 20]
+  - family: griewank
+    dim: [5, 20]
+  - family: schwefel
+    dim: [5, 20]
+  - family: levy
+    dim: [5, 20]
+  - family: step
+    dim: [5, 20]
+  - family: sphere
+    dim: 10
+    params: {noise: 0.1}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: DE best/1, entry: de, params: {strategy: best/1}}
+  - {name: CMA-ES, entry: cmaes}
+  - {name: PSO, entry: pso, params: {max_iterations: null}}
+  - {name: GWO, entry: gwo}
+  - {name: WOA, entry: woa}
+  - {name: Firefly, entry: firefly}
+  - {name: Cuckoo, entry: cuckoo}
+  - {name: ABC, entry: abc}
+  - {name: Bat, entry: bat}
+  - {name: Harmony, entry: harmony}
+  - {name: TLBO, entry: tlbo}
+  - {name: SCA, entry: sca}
+  - {name: Jaya, entry: jaya}
+  - {name: ACOR, entry: acor}
+  - {name: Tabu, entry: tabu}
+  - {name: GA, entry: genetic}

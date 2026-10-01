@@ -25,6 +25,7 @@ In all cases, every individual run is captured and accessible via the
 
 from __future__ import annotations
 
+import inspect
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -133,6 +134,7 @@ class EnsembleOptimiser(BaseOptimiser):
         *,
         maximise: bool = False,
         optimiser_kwargs: Optional[List[Dict[str, Any]]] = None,
+        max_evaluations: Optional[int] = None,
         **kwargs: Any,
     ) -> EnsembleResult:
         """Run the ensemble.
@@ -150,11 +152,30 @@ class EnsembleOptimiser(BaseOptimiser):
             ``**kwargs`` to the i-th optimiser's ``optimise`` call.  If not
             provided, each optimiser is called with no extra kwargs (beyond
             *objective_fn*, *bounds*, and *maximise*).
+        max_evaluations : int, optional
+            Total evaluation budget, split evenly over the members (or the
+            restarts) and passed to those that accept ``max_evaluations``.
+        **kwargs
+            Forwarded to every member (e.g. ``n_genes`` for discrete
+            problems).
 
         Returns
         -------
         EnsembleResult
         """
+        n_members = len(self.optimisers) if self.strategy != "random_restart" else 1
+        member_kwargs = []
+        for idx in range(n_members):
+            kw = dict(kwargs)
+            kw.update(optimiser_kwargs[idx] if optimiser_kwargs and idx < len(optimiser_kwargs) else {})
+            if max_evaluations is not None and "max_evaluations" in inspect.signature(
+                self.optimisers[idx].optimise
+            ).parameters:
+                n_calls = self.n_restarts if self.strategy == "random_restart" else n_members
+                kw.setdefault("max_evaluations", max(1, max_evaluations // n_calls))
+            member_kwargs.append(kw)
+        optimiser_kwargs = member_kwargs
+
         if self.strategy == "best":
             return self._run_best(objective_fn, bounds, maximise, optimiser_kwargs)
         if self.strategy == "chain":

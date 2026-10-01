@@ -375,7 +375,13 @@ class GeneticOptimiser(BaseOptimiser):
         if n % 2 != 0:
             n -= 1
 
-        # Convert minimisation fitness to selection weights
+        # Convert minimisation fitness to selection weights.  Values are
+        # shifted to be positive first so negative objectives (e.g. negated
+        # profits when maximising) still give valid, best-favouring weights.
+        lowest = min(fitness)
+        if lowest < 0:
+            spread = (sum(fitness) / len(fitness) - lowest) or 1.0
+            fitness = [f - lowest + spread for f in fitness]
         inv_fitness = [1.0 / (f + _FITNESS_EPSILON) for f in fitness]
         total = sum(inv_fitness)
         weights = [v / total for v in inv_fitness]

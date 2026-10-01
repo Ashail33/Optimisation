@@ -31,9 +31,19 @@ Ensembles (:mod:`optim.ensembles`):
 * :class:`MemeticOptimiser` — global search + local refinement
 * :class:`CooperativeCoevolutionOptimiser` — variable decomposition
 
+Problems, taxonomy and benchmarking
+-----------------------------------
+* :mod:`optim.problems` — continuous, combinatorial and profit-function
+  problem families (``make_problem``)
+* :mod:`optim.taxonomy` — machine-readable cards for every optimiser and
+  ensemble (Talbi classes for ensembles)
+* :mod:`optim.bench` — config-driven benchmark harness, metrics and
+  dashboard (``optbench`` CLI; needs the ``bench`` extra)
+
 Data containers
 ---------------
 * :class:`OptimisationResult` — result returned by every optimiser
+* :class:`Step` — one state-action step of a recorded trajectory
 * :class:`EnsembleResult` — extended result including per-run data
 
 Quick start
@@ -63,7 +73,7 @@ from .algorithms import (
     TLBOOptimiser,
     WhaleOptimiser,
 )
-from .base import BaseOptimiser, OptimisationResult
+from .base import BaseOptimiser, OptimisationResult, Step
 from .ensemble import EnsembleOptimiser, EnsembleResult
 from .ensembles import (
     AdaptiveEnsembleOptimiser,
@@ -77,7 +87,7 @@ from .population import PopulationOptimiser
 from .pso import PSOOptimiser
 from .sa import DBMOSAOptimiser, SimulatedAnnealingOptimiser
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Registry of single-algorithm optimiser classes keyed by short name.  Useful
 # for CLIs / config-driven pipelines, e.g. ``OPTIMISERS["pso"](n_particles=20)``.
@@ -119,6 +129,7 @@ __all__ = [
     "PopulationOptimiser",
     "OptimisationResult",
     "EnsembleResult",
+    "Step",
     # core
     "GeneticOptimiser",
     "PSOOptimiser",
