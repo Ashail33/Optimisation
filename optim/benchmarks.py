@@ -81,7 +81,7 @@ def zakharov(x) -> float:
 
 
 def styblinski_tang(x) -> float:
-    """Minimum ``-39.16599 * d`` at ``x_i = -2.903534``."""
+    """Minimum ``-39.16616570 * d`` at ``x_i = -2.903534``."""
     x = np.asarray(x, dtype=float)
     return float(0.5 * np.sum(x ** 4 - 16 * x ** 2 + 5 * x))
 
@@ -112,7 +112,7 @@ BENCHMARKS: Dict[str, Benchmark] = {
     "schwefel": Benchmark(schwefel, (-500.0, 500.0)),
     "levy": Benchmark(levy, (-10.0, 10.0)),
     "zakharov": Benchmark(zakharov, (-5.0, 10.0), multimodal=False),
-    "styblinski_tang": Benchmark(styblinski_tang, (-5.0, 5.0), -39.16599),
+    "styblinski_tang": Benchmark(styblinski_tang, (-5.0, 5.0), -39.16616570377141),
 }
 
 

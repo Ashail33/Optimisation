@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6d68;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6; --muted-series: #c9c8c1;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --seq-0:#cde2fb; --seq-1:#9ec5f4; --seq-2:#6da7ec; --seq-3:#3987e5; --seq-4:#256abf; --seq-5:#184f95; --seq-6:#0d366b;
+  --good:#006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #222221;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #9a988f;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --accent: #3987e5; --muted-series: #4a4946;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --seq-0:#104281; --seq-1:#184f95; --seq-2:#1c5cab; --seq-3:#256abf; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#b7d3f6;
+    --good:#0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --raised: #222221;
+  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #9a988f;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --accent: #3987e5; --muted-series: #4a4946;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --seq-0:#104281; --seq-1:#184f95; --seq-2:#1c5cab; --seq-3:#256abf; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#b7d3f6;
+  --good:#0ca30c;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+.sub { color: var(--ink-2); margin: 4px 0 0; }
+.note { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+.theme-btn { background: none; border: 1px solid var(--border); color: var(--ink-2); border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12.5px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.kpi .label { color: var(--ink-2); font-size: 12.5px; }
+.kpi .value { font-size: 24px; font-weight: 600; margin-top: 2px; }
+.kpi .hint { color: var(--muted); font-size: 12px; }
+.filters { background: var(--page); padding: 10px 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; border-bottom: 1px solid var(--border); }
+.filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+select { font: inherit; font-size: 13px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; min-width: 130px; max-width: 100%; }
+nav.tabs { display: flex; gap: 4px; margin: 16px 0 12px; flex-wrap: wrap; }
+nav.tabs button { font: inherit; font-size: 13px; border: 1px solid transparent; background: none; color: var(--ink-2); padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+nav.tabs button[aria-selected="true"] { background: var(--surface); border-color: var(--border); color: var(--ink); font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--ink-2); font-weight: 600; font-size: 12px; cursor: default; }
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--ink); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; background: var(--accent); vertical-align: middle; margin-right: 8px; }
+.pill { display: inline-block; font-size: 11.5px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; margin: 1px 2px 1px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.chip { font: inherit; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--raised); color: var(--ink-2); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.chip[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+.chip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted-series); }
+.chart-box { position: relative; height: 380px; outline-offset: 2px; }
+.chart-box svg { display: block; }
+.heat td.cell { width: 34px; min-width: 34px; height: 26px; padding: 0; border: 2px solid var(--surface); border-radius: 4px; }
+.heat th.col { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 500; font-size: 11.5px; padding: 6px 2px; vertical-align: bottom; max-height: 220px; }
+.legend-ramp { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+.legend-ramp .ramp { display: flex; }
+.legend-ramp .ramp span { width: 26px; height: 10px; }
+.tip { position: fixed; pointer-events: none; background: var(--raised); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: none; z-index: 20; max-width: 320px; }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin-top: 10px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+pre { background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 12px; }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+[hidden] { display: none !important; }
+@media (min-width: 720px) { .filters { position: sticky; top: 0; z-index: 5; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">Optimiser benchmark</h1>
+      <p class="sub" id="subtitle"></p>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">Toggle theme</button>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <label>Problem category<select id="fCategory"></select></label>
+    <label>Encoding<select id="fEncoding"></select></label>
+    <label>Dimension<select id="fDim"></select></label>
+    <label>Problem tag<select id="fTag"></select></label>
+    <label>Optimiser kind<select id="fKind"></select></label>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="leaderboard" aria-selected="true">Leaderboard</button>
+    <button role="tab" data-tab="heatmap" aria-selected="false">Problem × optimiser</button>
+    <button role="tab" data-tab="convergence" aria-selected="false">Convergence</button>
+    <button role="tab" data-tab="ecdf" aria-selected="false">Anytime ECDF</button>
+    <button role="tab" data-tab="taxonomy" aria-selected="false">Taxonomy</button>
+    <button role="tab" data-tab="run" aria-selected="false">Run</button>
+  </nav>
+
+  <section data-panel="leaderboard" class="card">
+    <h2>Leaderboard</h2>
+    <p class="note">Rank: each optimiser is ranked by normalised gap on every task (problem instance × budget, averaged over repeats); the rank is rescaled to 0 = best … 1 = worst among the optimisers that ran on that task, then averaged. Score = 1 − gap, where gap 0 is the optimum (or best-known) and gap 1 is no better than random sampling. Optimisers that only cover some tasks (e.g. permutation-only) are listed after full-coverage ones. Click a column to sort.</p>
+    <div class="scroll"><table id="board"></table></div>
+  </section>
+
+  <section data-panel="heatmap" class="card" hidden>
+    <h2>Precision per problem</h2>
+    <p class="note">Each cell is an optimiser's mean normalised gap on one problem instance, binned by order of magnitude (stronger colour = closer to the optimum). Rows are ordered by rank. Empty cells: the optimiser cannot solve that encoding. Hover or focus a cell for exact values.</p>
+    <div class="scroll"><table class="heat" id="heat"></table></div>
+    <div class="legend-ramp"><span>gap &gt; 0.5 (near random)</span><span class="ramp" id="ramp"></span><span>gap ≤ 10⁻⁸ (solved)</span></div>
+  </section>
+
+  <section data-panel="convergence" class="card" hidden>
+    <h2>Convergence</h2>
+    <p class="note">Median normalised gap of the incumbent versus the fraction of the evaluation budget used (both axes logarithmic). Pick up to 8 optimisers to colour; the rest stay grey for context.</p>
+    <label class="note">Problem instance <select id="fProblem"></select></label>
+    <div class="chips" id="chipsConv"></div>
+    <div class="chart-box" id="convChart" role="img" aria-label="Convergence chart: median normalised gap versus fraction of budget"></div>
+    <details><summary>Table view</summary><div class="scroll"><table id="convTable"></table></div></details>
+  </section>
+
+  <section data-panel="ecdf" class="card" hidden>
+    <h2>Anytime performance (ECDF)</h2>
+    <p class="note">Fraction of (run, target) pairs reached versus evaluations ÷ dimension, for gap targets 10⁻¹ … 10⁻⁸ (COCO-style runtime distribution). Higher and further left is better. Uses the problem-category filter.</p>
+    <div class="chips" id="chipsEcdf"></div>
+    <div class="chart-box" id="ecdfChart" role="img" aria-label="ECDF chart: fraction of targets reached versus evaluations per dimension"></div>
+    <details><summary>Table view</summary><div class="scroll"><table id="ecdfTable"></table></div></details>
+  </section>
+
+  <section data-panel="taxonomy" hidden>
+    <div class="card">
+      <h2>Optimisers</h2>
+      <p class="note">Single algorithms by family and search model, with the mechanisms and biases recorded on their cards.</p>
+      <div class="scroll"><table id="taxOpt"></table></div>
+    </div>
+    <div class="card">
+      <h2>Ensembles</h2>
+      <p class="note">Talbi's hybrid taxonomy: level (Low = embedded, High = self-contained) × mode (Relay = sequential, Teamwork = cooperative) → LRH, LTH, HRH, HTH.</p>
+      <div class="scroll"><table id="taxEns"></table></div>
+    </div>
+    <div class="card">
+      <h2>Problems in this run</h2>
+      <div class="scroll"><table id="taxProb"></table></div>
+    </div>
+  </section>
+
+  <section data-panel="run" class="card" hidden>
+    <h2>Run details</h2>
+    <div class="grid2">
+      <div><h2>Statistics</h2><div id="stats"></div></div>
+      <div><h2>Environment</h2><pre id="env"></pre></div>
+    </div>
+    <h2 style="margin-top:12px">Configuration</h2>
+    <pre id="cfg"></pre>
+  </section>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script id="bench-data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  const D = JSON.parse(document.getElementById("bench-data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fmt = (v, d = 3) => v == null || !isFinite(v) ? "—" : (Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(1) : v.toFixed(d));
+  const pct = (v) => v == null ? "—" : (100 * v).toFixed(0) + "%";
+  const cards = D.optimiser_cards || {};
+  const kindOf = (o) => (cards[o] && cards[o].kind) || "optimiser";
+  const groupOf = (o) => { const c = cards[o] || {}; return c.kind === "ensemble" ? c.talbi_class + " · " + c.category : (c.family || ""); };
+
+  // ---------------- theme ----------------
+  $("themeBtn").addEventListener("click", () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    renderCharts();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderCharts);
+
+  // ---------------- header ----------------
+  $("title").textContent = "Optimiser benchmark — " + (D.name || "run");
+  $("subtitle").textContent = [D.created && ("run " + D.created.replace("T", " ")), D.elapsed_s != null && (D.elapsed_s + " s")].filter(Boolean).join(" · ");
+  document.title = "Benchmark " + (D.name || "");
+  const problems = Object.keys(D.problems || {});
+  const fr = D.friedman || {};
+  $("kpis").innerHTML = [
+    ["Runs", D.n_runs, (D.n_skipped || 0) + " incompatible pairs skipped"],
+    ["Optimisers & ensembles", (D.optimisers || []).length, ""],
+    ["Problem instances", problems.length, (D.categories || []).join(", ")],
+    ["Friedman test", fr.p_value == null ? "—" : (fr.p_value < 1e-4 ? "p < 0.0001" : "p = " + fr.p_value.toFixed(4)),
+      fr.n_tasks ? fr.n_optimisers + " optimisers × " + fr.n_tasks + " tasks" : "needs ≥ 3 optimisers"],
+  ].map(([l, v, h]) => `<div class="kpi"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="hint">${esc(h)}</div></div>`).join("");
+
+  // ---------------- filters ----------------
+  const rows = D.task_rows || [];
+  const uniq = (a) => [...new Set(a)].sort((x, y) => (typeof x === "number" ? x - y : String(x).localeCompare(String(y))));
+  const tags = uniq(rows.flatMap((r) => (r.tags || "").split(",").filter(Boolean)));
+  function fill(sel, values, label) {
+    $(sel).innerHTML = `<option value="">All ${label}</option>` + values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  }
+  fill("fCategory", uniq(rows.map((r) => r.category)), "categories");
+  fill("fEncoding", uniq(rows.map((r) => r.encoding)), "encodings");
+  fill("fDim", uniq(rows.map((r) => r.dim)), "dimensions");
+  fill("fTag", tags, "tags");
+  fill("fKind", ["optimiser", "ensemble"], "kinds");
+  ["fCategory", "fEncoding", "fDim", "fTag", "fKind"].forEach((id) => $(id).addEventListener("change", update));
+
+  function filtered() {
+    const c = $("fCategory").value, e = $("fEncoding").value, d = $("fDim").value, t = $("fTag").value, k = $("fKind").value;
+    return rows.filter((r) => (!c || r.category === c) && (!e || r.encoding === e) && (!d || String(r.dim) === d)
+      && (!t || (r.tags || "").split(",").includes(t)) && (!k || kindOf(r.optimiser) === k));
+  }
+
+  // ---------------- leaderboard (recomputed client-side) ----------------
+  let sortKey = "rank", sortAsc = true;
+  function leaderboard(sub) {
+    const tasks = {};
+    sub.forEach((r) => { (tasks[r.problem + "|" + r.budget] ||= []).push(r); });
+    const acc = {};
+    Object.values(tasks).forEach((list) => {
+      const sorted = [...list].sort((a, b) => a.gap - b.gap);
+      sorted.forEach((r) => {
+        const ties = sorted.filter((x) => x.gap === r.gap);
+        const first = sorted.indexOf(ties[0]);
+        const raw = first + (ties.length + 1) / 2;
+        const rank = sorted.length > 1 ? (raw - 1) / (sorted.length - 1) : 0.5;
+        const a = (acc[r.optimiser] ||= { optimiser: r.optimiser, ranks: [], gaps: [], scores: [], aucs: [], solved: [], wall: [] });
+        a.ranks.push(rank); a.gaps.push(r.gap); a.scores.push(r.score); a.aucs.push(r.auc); a.solved.push(r.solved); a.wall.push(r.wall);
+      });
+    });
+    const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+    const median = (a) => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+    const maxTasks = Math.max(0, ...Object.values(acc).map((a) => a.ranks.length));
+    return Object.values(acc).map((a) => ({ full: a.ranks.length === maxTasks, maxTasks,
+      optimiser: a.optimiser, kind: kindOf(a.optimiser), group: groupOf(a.optimiser), tasks: a.ranks.length,
+      rank: mean(a.ranks), score: mean(a.scores), gap: median(a.gaps), solved: mean(a.solved), auc: mean(a.aucs), wall: mean(a.wall),
+    }));
+  }
+  const boardCols = [
+    ["rank", "Rank (0 best)", "num"], ["optimiser", "Optimiser", ""], ["group", "Family / class", ""], ["tasks", "Tasks", "num"],
+    ["score", "Mean score", "num"], ["gap", "Median gap", "num"], ["solved", "Solved", "num"], ["auc", "Anytime AUC", "num"], ["wall", "Time / run (s)", "num"],
+  ];
+  function renderBoard(sub) {
+    const lb = leaderboard(sub).sort((a, b) => {
+      const x = a[sortKey], y = b[sortKey];
+      const r = typeof x === "string" ? x.localeCompare(y) : x - y;
+      if (sortKey === "rank" && a.full !== b.full) return a.full ? -1 : 1;
+      return sortAsc ? r : -r;
+    });
+    const head = "<thead><tr>" + boardCols.map(([k, l, c]) => `<th class="sortable ${c}" data-k="${k}" aria-sort="${k === sortKey ? (sortAsc ? "ascending" : "descending") : "none"}">${l}${k === sortKey ? (sortAsc ? " ↑" : " ↓") : ""}</th>`).join("") + "</tr></thead>";
+    const body = lb.length ? lb.map((r) => `<tr>
+      <td class="num">${fmt(r.rank, 2)}</td>
+      <td><strong>${esc(r.optimiser)}</strong> <span class="pill">${esc(r.kind)}</span></td>
+      <td>${esc(r.group)}</td>
+      <td class="num">${r.tasks}${r.full ? "" : ` <span class="pill">of ${r.maxTasks}</span>`}</td>
+      <td class="num"><span class="bar" style="width:${Math.max(2, 80 * r.score)}px"></span>${fmt(r.score, 3)}</td>
+      <td class="num">${fmt(r.gap)}</td>
+      <td class="num">${pct(r.solved)}</td>
+      <td class="num">${fmt(r.auc, 3)}</td>
+      <td class="num">${fmt(r.wall, 3)}</td></tr>`).join("") : `<tr><td colspan="9" class="empty">No runs match these filters.</td></tr>`;
+    $("board").innerHTML = head + "<tbody>" + body + "</tbody>";
+    $("board").querySelectorAll("th.sortable").forEach((th) => th.addEventListener("click", () => {
+      const k = th.dataset.k; sortAsc = k === sortKey ? !sortAsc : ["rank", "gap", "wall", "optimiser", "group"].includes(k);
+      sortKey = k; renderBoard(filtered());
+    }));
+    return lb;
+  }
+
+  // ---------------- heatmap ----------------
+  const seq = () => [0, 1, 2, 3, 4, 5, 6].map((i) => css("--seq-" + i));
+  // Gap bins, worst → best; precision varies by orders of magnitude, so bins are logarithmic.
+  const GAP_BINS = [[Infinity, "> 0.5"], [0.5, "≤ 0.5"], [1e-1, "≤ 10⁻¹"], [1e-2, "≤ 10⁻²"], [1e-3, "≤ 10⁻³"], [1e-5, "≤ 10⁻⁵"], [1e-8, "≤ 10⁻⁸ (solved)"]];
+  function gapBin(gap) { let b = 0; GAP_BINS.forEach(([t], i) => { if (gap <= t) b = i; }); return b; }
+  function heatColor(gap) { return seq()[gapBin(gap)]; }
+  function renderHeat(sub, lb) {
+    const order = [...lb].sort((a, b) => (a.full !== b.full ? (a.full ? -1 : 1) : a.rank - b.rank)).map((r) => r.optimiser);
+    const probs = uniq(sub.map((r) => r.problem));
+    const cell = {}; sub.forEach((r) => { cell[r.optimiser + "|" + r.problem] = r; });
+    if (!probs.length) { $("heat").innerHTML = `<tr><td class="empty">No runs match these filters.</td></tr>`; return; }
+    let html = "<thead><tr><th></th>" + probs.map((p) => `<th class="col" title="${esc(p)}">${esc(p)}</th>`).join("") + "</tr></thead><tbody>";
+    order.forEach((o) => {
+      html += `<tr><th>${esc(o)}</th>` + probs.map((p) => {
+        const r = cell[o + "|" + p];
+        return r ? `<td class="cell" style="background:${heatColor(r.gap)}" data-tip="${esc(o)} on ${esc(p)}|score ${fmt(r.score)} · gap ${fmt(r.gap)} · solved ${pct(r.solved)}" tabindex="0"></td>`
+                 : `<td class="cell" style="background:transparent" data-tip="${esc(o)} on ${esc(p)}|not applicable"></td>`;
+      }).join("") + "</tr>";
+    });
+    $("heat").innerHTML = html + "</tbody>";
+    $("ramp").innerHTML = seq().map((c, i) => `<span style="background:${c}" title="gap ${GAP_BINS[i][1]}"></span>`).join("");
+  }
+  const tip = $("tip");
+  function showTip(e, text) {
+    const [a, b] = text.split("|");
+    tip.innerHTML = `<strong>${a}</strong><br>${b || ""}`;
+    tip.style.display = "block";
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+  }
+  $("heat").addEventListener("mousemove", (e) => { const t = e.target.closest("[data-tip]"); t ? showTip(e, t.dataset.tip) : (tip.style.display = "none"); });
+  $("heat").addEventListener("mouseleave", () => (tip.style.display = "none"));
+  $("heat").addEventListener("focusin", (e) => { const t = e.target.closest("[data-tip]"); if (t) { const r = t.getBoundingClientRect(); showTip({ clientX: r.right, clientY: r.bottom }, t.dataset.tip); } });
+  $("heat").addEventListener("focusout", () => (tip.style.display = "none"));
+
+  // ---------------- highlight selection (colour follows the optimiser) ----------------
+  const SLOTS = 8;
+  const slotOf = new Map(); // optimiser -> slot index, kept while selected
+  function toggle(o) {
+    if (slotOf.has(o)) slotOf.delete(o);
+    else if (slotOf.size < SLOTS) {
+      const used = new Set(slotOf.values());
+      for (let i = 0; i < SLOTS; i++) if (!used.has(i)) { slotOf.set(o, i); break; }
+    }
+    renderChips(); renderCharts();
+  }
+  function colourOf(o) { return slotOf.has(o) ? css("--s" + (slotOf.get(o) + 1)) : css("--muted-series"); }
+  function renderChips() {
+    const html = (D.optimisers || []).map((o) => `<button type="button" class="chip" aria-pressed="${slotOf.has(o)}" data-o="${esc(o)}"><span class="dot" style="background:${colourOf(o)}"></span>${esc(o)}</button>`).join("");
+    ["chipsConv", "chipsEcdf"].forEach((id) => {
+      $(id).innerHTML = html;
+      $(id).querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => toggle(b.dataset.o)));
+    });
+  }
+
+  // ---------------- charts (dependency-free SVG) ----------------
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const sup = (e) => "10" + String(e).replace(/-/g, "⁻").replace(/\d/g, (d) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]);
+  function svgEl(tag, attrs, parent) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function scale(lo, hi, a, b, log) {
+    const f = log ? Math.log10 : (v) => v;
+    const L = f(lo), H = f(hi);
+    return (v) => a + (b - a) * ((f(v) - L) / ((H - L) || 1));
+  }
+  function ticksFor(lo, hi, log, max = 8) {
+    if (log) {
+      const a = Math.ceil(Math.log10(lo) - 1e-9), b = Math.floor(Math.log10(hi) + 1e-9);
+      const step = Math.max(1, Math.ceil((b - a + 1) / max));
+      const out = []; for (let e = a; e <= b; e += step) out.push({ v: Math.pow(10, e), label: sup(e) });
+      return out;
+    }
+    return [0, 0.25, 0.5, 0.75, 1].map((v) => ({ v, label: (100 * v).toFixed(0) + "%" }));
+  }
+  function lineChart(box, series, o) {
+    box.innerHTML = "";
+    const W = Math.max(300, box.clientWidth || 800), H = box.clientHeight || 380;
+    const m = { l: 52, r: 18, t: 12, b: 42 };
+    const svg = svgEl("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, box);
+    const xs = series.length ? series[0].data.map((p) => p.x) : [1, 10];
+    const x = scale(xs[0], xs[xs.length - 1], m.l, W - m.r, o.xLog);
+    const y = scale(o.yMin, o.yMax, H - m.b, m.t, o.yLog);
+    const grid = css("--grid"), axis = css("--axis"), muted = css("--muted"), ink2 = css("--ink-2"), surface = css("--surface");
+    ticksFor(o.yMin, o.yMax, o.yLog).forEach((t) => {
+      svgEl("line", { x1: m.l, x2: W - m.r, y1: y(t.v), y2: y(t.v), stroke: grid, "stroke-width": 1 }, svg);
+      svgEl("text", { x: m.l - 8, y: y(t.v) + 4, "text-anchor": "end", fill: muted, "font-size": 11 }, svg).textContent = t.label;
+    });
+    ticksFor(xs[0], xs[xs.length - 1], o.xLog).forEach((t) => {
+      svgEl("text", { x: x(t.v), y: H - m.b + 16, "text-anchor": "middle", fill: muted, "font-size": 11 }, svg).textContent = t.label;
+    });
+    svgEl("line", { x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: axis, "stroke-width": 1 }, svg);
+    svgEl("text", { x: (m.l + W - m.r) / 2, y: H - 6, "text-anchor": "middle", fill: ink2, "font-size": 12 }, svg).textContent = o.xLabel;
+    svgEl("text", { x: 12, y: (m.t + H - m.b) / 2, transform: `rotate(-90 12 ${(m.t + H - m.b) / 2})`, "text-anchor": "middle", fill: ink2, "font-size": 12 }, svg).textContent = o.yLabel;
+    const clampY = (v) => Math.min(o.yMax, Math.max(o.yMin, v));
+    const ordered = [...series].sort((a, b) => slotOf.has(a.label) - slotOf.has(b.label));
+    ordered.forEach((s) => {
+      const hi = slotOf.has(s.label);
+      let d = "", pen = false;
+      s.data.forEach((p) => {
+        if (p.y == null) { pen = false; return; }
+        d += (pen ? "L" : "M") + x(p.x).toFixed(1) + "," + y(clampY(p.y)).toFixed(1); pen = true;
+      });
+      svgEl("path", { d, fill: "none", stroke: colourOf(s.label), "stroke-width": hi ? 2 : 1, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: hi ? 1 : 0.7 }, svg);
+    });
+    // direct end labels for up to 4 highlighted series (nudged apart)
+    const hiSeries = series.filter((s) => slotOf.has(s.label));
+    if (hiSeries.length && hiSeries.length <= 4) {
+      const ends = hiSeries.map((s) => { const last = [...s.data].reverse().find((p) => p.y != null); return last && { s, py: y(clampY(last.y)), px: x(last.x) }; }).filter(Boolean).sort((a, b) => a.py - b.py);
+      for (let i = 1; i < ends.length; i++) if (ends[i].py - ends[i - 1].py < 14) ends[i].py = ends[i - 1].py + 14;
+      ends.forEach((e) => {
+        const t = svgEl("text", { x: e.px - 4, y: e.py - 6, "text-anchor": "end", fill: css("--ink"), "font-size": 11.5, "font-weight": 600, "paint-order": "stroke", stroke: surface, "stroke-width": 3 }, svg);
+        t.textContent = e.s.label;
+      });
+    }
+    // hover layer: crosshair + tooltip (keyboard: arrow keys)
+    const cross = svgEl("line", { y1: m.t, y2: H - m.b, stroke: axis, "stroke-width": 1, visibility: "hidden" }, svg);
+    const dots = svgEl("g", {}, svg);
+    const hit = svgEl("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent" }, svg);
+    box.tabIndex = 0;
+    let idx = -1;
+    function show(i, cx, cy) {
+      idx = Math.max(0, Math.min(xs.length - 1, i));
+      const px = x(xs[idx]);
+      cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+      dots.innerHTML = "";
+      const shown = (hiSeries.length ? hiSeries : series).map((s) => ({ s, v: s.data[idx].y })).filter((r) => r.v != null)
+        .sort((a, b) => o.better(a.v, b.v)).slice(0, 8);
+      shown.forEach((r) => svgEl("circle", { cx: px, cy: y(clampY(r.v)), r: 4, fill: colourOf(r.s.label), stroke: surface, "stroke-width": 2 }, dots));
+      tip.innerHTML = `<strong>${o.xFmt(xs[idx])}</strong>` + shown.map((r) => `<br><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colourOf(r.s.label)};margin-right:6px"></span>${esc(r.s.label)}: ${o.yFmt(r.v)}`).join("") +
+        (hiSeries.length ? "" : `<br><span style="color:var(--muted)">best ${shown.length} shown — pick optimisers to focus</span>`);
+      tip.style.display = "block";
+      const rect = box.getBoundingClientRect();
+      const tx = cx ?? rect.left + px, ty = cy ?? rect.top + m.t;
+      tip.style.left = Math.min(tx + 14, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (ty + 14) + "px";
+    }
+    function hide() { cross.setAttribute("visibility", "hidden"); dots.innerHTML = ""; tip.style.display = "none"; }
+    hit.addEventListener("mousemove", (e) => {
+      const r = svg.getBoundingClientRect(); const px = e.clientX - r.left;
+      let best = 0, bd = Infinity; xs.forEach((v, i) => { const d = Math.abs(x(v) - px); if (d < bd) { bd = d; best = i; } });
+      show(best, e.clientX, e.clientY);
+    });
+    hit.addEventListener("mouseleave", hide);
+    box.onkeydown = (e) => { if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); show((idx < 0 ? xs.length - 1 : idx) + (e.key === "ArrowRight" ? 1 : -1)); } };
+    box.onblur = hide;
+    if (!series.length) svgEl("text", { x: W / 2, y: H / 2, "text-anchor": "middle", fill: muted }, svg).textContent = "No data for this selection";
+  }
+  const FLOOR = 1e-10;
+  function convSeries() {
+    const p = $("fProblem").value; const by = (D.curves.by_problem || {})[p] || {};
+    const fr = D.curves.fractions;
+    return Object.entries(by).map(([o, ys]) => ({ label: o, data: ys.map((v, i) => ({ x: fr[i], y: v == null ? null : Math.max(FLOOR, v) })) }));
+  }
+  function ecdfSeries() {
+    const cat = $("fCategory").value || "all"; const by = (D.ecdf.by_category || {})[cat] || {};
+    return Object.entries(by).map(([o, ys]) => ({ label: o, data: ys.map((v, i) => ({ x: D.ecdf.grid[i], y: v })) }));
+  }
+  function renderCharts() {
+    const conv = convSeries();
+    const gmax = Math.max(1, ...conv.flatMap((s) => s.data.map((p) => p.y ?? 0)));
+    if (!$("convChart").closest("[data-panel]").hidden)
+      lineChart($("convChart"), conv, { xLog: true, yLog: true, yMin: FLOOR, yMax: Math.pow(10, Math.ceil(Math.log10(gmax))),
+        xLabel: "fraction of evaluation budget", yLabel: "median normalised gap", xFmt: (v) => (100 * v).toPrecision(2) + "% of budget",
+        yFmt: (v) => (v <= FLOOR ? "≤ 1e-10" : fmt(v)), better: (a, b) => a - b });
+    const ec = ecdfSeries();
+    if (!$("ecdfChart").closest("[data-panel]").hidden)
+      lineChart($("ecdfChart"), ec, { xLog: true, yLog: false, yMin: 0, yMax: 1,
+        xLabel: "evaluations ÷ dimension", yLabel: "fraction of (run, target) pairs reached", xFmt: (v) => fmt(v, 0) + " evals/dim",
+        yFmt: (v) => pct(v), better: (a, b) => b - a });
+    $("convTable").innerHTML = "<thead><tr><th>Optimiser</th><th class='num'>gap @ 10% budget</th><th class='num'>gap @ full budget</th></tr></thead><tbody>" +
+      conv.map((s) => { const n = s.data.length; const at10 = s.data.reduce((b, p) => (p.x <= 0.1 ? p : b), s.data[0]);
+        return `<tr><td>${esc(s.label)}</td><td class="num">${fmt(at10 && at10.y)}</td><td class="num">${fmt(s.data[n - 1] && s.data[n - 1].y)}</td></tr>`; }).join("") + "</tbody>";
+    $("ecdfTable").innerHTML = "<thead><tr><th>Optimiser</th><th class='num'>reached at end</th></tr></thead><tbody>" +
+      [...ec].sort((a, b) => b.data[b.data.length - 1].y - a.data[a.data.length - 1].y).map((s) => `<tr><td>${esc(s.label)}</td><td class="num">${pct(s.data[s.data.length - 1].y)}</td></tr>`).join("") + "</tbody>";
+    renderChips();
+  }
+  let resizeTimer; addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderCharts, 150); });
+  $("fProblem").addEventListener("change", renderCharts);
+
+  // ---------------- taxonomy ----------------
+  function renderTaxonomy() {
+    const list = Object.entries(cards);
+    const opt = list.filter(([, c]) => c.kind !== "ensemble");
+    const ens = list.filter(([, c]) => c.kind === "ensemble");
+    const pills = (a) => (a || []).map((t) => `<span class="pill">${esc(t)}</span>`).join("");
+    $("taxOpt").innerHTML = "<thead><tr><th>Name</th><th>Algorithm</th><th>Family</th><th>Search</th><th>Encodings</th><th>Biases</th><th>Mechanisms</th><th>Reference</th></tr></thead><tbody>" +
+      (opt.length ? opt.map(([n, c]) => `<tr><td><strong>${esc(n)}</strong></td><td>${esc(c.name)}</td><td>${esc(c.family)}</td><td>${esc(c.search)}</td><td>${pills(c.encodings)}</td><td>${pills(c.biases)}</td><td>${pills(c.mechanisms)}</td><td>${esc(c.reference)}</td></tr>`).join("")
+        : `<tr><td colspan="8" class="empty">No single optimisers in this run.</td></tr>`) + "</tbody>";
+    $("taxEns").innerHTML = "<thead><tr><th>Name</th><th>Strategy</th><th>Talbi class</th><th>Category</th><th>Cooperation</th><th>Adaptive</th><th>Members</th><th>Reference</th></tr></thead><tbody>" +
+      (ens.length ? ens.map(([n, c]) => {
+        const p = (c.spec && c.spec.params) || {};
+        const mem = Object.values(p).flatMap((v) => Array.isArray(v) ? v : [v]).filter((v) => v && v.entry).map((v) => v.entry);
+        return `<tr><td><strong>${esc(n)}</strong></td><td>${esc(c.name)}</td><td>${esc(c.talbi_class)}</td><td>${esc(c.category)}</td><td>${esc(c.cooperation)}</td><td>${c.adaptive ? "yes" : "no"}</td><td>${pills(mem)}</td><td>${esc(c.reference)}</td></tr>`;
+      }).join("") : `<tr><td colspan="8" class="empty">No ensembles in this run.</td></tr>`) + "</tbody>";
+    $("taxProb").innerHTML = "<thead><tr><th>Instance</th><th>Category</th><th>Encoding</th><th>Sense</th><th class='num'>Dim</th><th>Optimum</th><th>Tags</th></tr></thead><tbody>" +
+      problems.map((k) => { const p = D.problems[k];
+        return `<tr><td>${esc(k)}</td><td>${esc(p.category)}</td><td>${esc(p.encoding)}</td><td>${esc(p.sense)}</td><td class="num">${p.dim}</td><td>${p.optimum == null ? "best-known" : "known"}</td><td>${pills(p.tags)}</td></tr>`; }).join("") + "</tbody>";
+  }
+
+  // ---------------- run details ----------------
+  $("env").textContent = JSON.stringify(D.environment || {}, null, 2);
+  $("cfg").textContent = JSON.stringify(D.config || {}, null, 2);
+  $("stats").innerHTML = `<table><tbody>
+    <tr><td>Friedman χ²</td><td class="num">${fmt(fr.statistic, 2)}</td></tr>
+    <tr><td>p-value</td><td class="num">${fr.p_value == null ? "—" : fr.p_value.toExponential(2)}</td></tr>
+    <tr><td>Optimisers in test</td><td class="num">${fr.n_optimisers ?? "—"}</td></tr>
+    <tr><td>Complete tasks</td><td class="num">${fr.n_tasks ?? "—"}</td></tr>
+    <tr><td>Gap targets</td><td class="num">${(D.targets || []).map((t) => t.toExponential(0)).join(", ")}</td></tr>
+    <tr><td>Errors / skipped pairs</td><td class="num">${D.n_errors || 0} / ${D.n_skipped || 0}</td></tr></tbody></table>`;
+
+  // ---------------- tabs + update ----------------
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
+    document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== b.dataset.tab));
+    if (b.dataset.tab === "convergence" || b.dataset.tab === "ecdf") renderCharts();
+  }));
+
+  function update() {
+    const sub = filtered();
+    const lb = renderBoard(sub);
+    renderHeat(sub, lb);
+    const probs = uniq(sub.map((r) => r.problem));
+    const current = $("fProblem").value;
+    $("fProblem").innerHTML = probs.map((p) => `<option ${p === current ? "selected" : ""}>${esc(p)}</option>`).join("");
+    renderCharts();
+  }
+
+  // default highlight: the top three by rank
+  (D.leaderboard || []).slice(0, 3).forEach((r, i) => slotOf.set(r.optimiser, i));
+  renderTaxonomy();
+  update();
+})();
+</script>
+</body>
+</html>

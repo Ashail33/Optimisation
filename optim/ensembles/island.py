@@ -29,7 +29,7 @@ import numpy as np
 
 from ..base import BaseOptimiser, OptimisationResult
 from ..ensemble import EnsembleResult
-from ._common import CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
+from ._common import Budget, CountingObjective, SolutionPool, derive_seed, run_optimiser, split_budget
 
 _TOPOLOGIES = ("ring", "fully_connected", "star", "random")
 
@@ -93,26 +93,29 @@ class IslandModelOptimiser(BaseOptimiser):
         maximise: bool = False,
         initial_solutions: Optional[Sequence[Any]] = None,
         optimiser_kwargs: Optional[List[Dict[str, Any]]] = None,
+        max_evaluations: Optional[int] = None,
         **kwargs: Any,
     ) -> EnsembleResult:
         """Run the island model.
 
         ``initial_solutions`` seed every island; ``optimiser_kwargs[i]`` is
-        forwarded to island ``i``'s ``optimise`` call.
+        forwarded to island ``i``'s ``optimise`` call; ``max_evaluations``
+        overrides the constructor's total budget.  Other keyword arguments
+        (e.g. ``n_genes``) are forwarded to every island.
         """
         rng = np.random.default_rng(self.seed)
         objective = CountingObjective(objective_fn, maximise)
+        total = self.max_evaluations if max_evaluations is None else max_evaluations
+        limit = Budget(total, objective)
         n_islands = len(self.optimisers)
         islands = [SolutionPool(self.island_size) for _ in range(n_islands)]
-        budget = self.epoch_evaluations or split_budget(
-            self.max_evaluations, self.n_epochs * n_islands
-        )
+        budget = self.epoch_evaluations or split_budget(total, self.n_epochs * n_islands)
 
         run_results: List[OptimisationResult] = []
         history: List[float] = []
         for epoch in range(self.n_epochs):
             for i, (opt, pool) in enumerate(zip(self.optimisers, islands)):
-                if self._spent(objective):
+                if limit.spent:
                     break
                 seeds = pool.solutions or (list(initial_solutions) if initial_solutions else None)
                 result = run_optimiser(
@@ -120,14 +123,14 @@ class IslandModelOptimiser(BaseOptimiser):
                     objective,
                     bounds,
                     population=seeds,
-                    max_evaluations=self._cap(budget, objective),
+                    max_evaluations=limit.cap(budget),
                     seed=derive_seed(rng),
-                    extra_kwargs=optimiser_kwargs[i] if optimiser_kwargs else None,
+                    extra_kwargs={**kwargs, **(optimiser_kwargs[i] if optimiser_kwargs else {})},
                 )
                 pool.add_result(result)
                 run_results.append(result)
             history.append(min(p.best_value for p in islands if len(p)))
-            if self._spent(objective):
+            if limit.spent:
                 break
             if epoch < self.n_epochs - 1:
                 self._migrate(islands, rng)
@@ -151,15 +154,6 @@ class IslandModelOptimiser(BaseOptimiser):
         )
 
     # ------------------------------------------------------------------
-    def _spent(self, objective: CountingObjective) -> bool:
-        return self.max_evaluations is not None and objective.n_evaluations >= self.max_evaluations
-
-    def _cap(self, budget: Optional[int], objective: CountingObjective) -> Optional[int]:
-        if self.max_evaluations is None:
-            return budget
-        remaining = self.max_evaluations - objective.n_evaluations
-        return remaining if budget is None else min(budget, remaining)
-
     def _sources(self, i: int, n: int, rng: np.random.Generator) -> List[int]:
         if self.topology == "ring":
             return [(i - 1) % n]

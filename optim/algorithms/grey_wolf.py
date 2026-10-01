@@ -38,6 +38,7 @@ class GreyWolfOptimiser(PopulationOptimiser):
 
     def _step(self, problem, state, rng):
         a = 2.0 * (1.0 - state.progress)
+        state.action = {"type": "gwo/encircle", "a": a}
         n, d = state.X.shape
         new = np.zeros_like(state.X)
         for leader in state.leaders:

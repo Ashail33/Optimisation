@@ -1,0 +1,34 @@
+# Applied profit functions: one family per profit-function type, with both
+# constraint-handling styles where they apply.
+name: profit
+budget: {per_dim: 1000}
+repeats: 5
+seed: 3
+n_jobs: 4
+problems:
+  - family: production_planning
+    dim: 10
+    params: {constraint_handling: [penalty, repair]}
+  - family: marketing_budget
+    dim: 10
+    params: {constraint_handling: [penalty, repair]}
+  - {family: pricing, dim: [5, 20]}
+  - family: portfolio
+    dim: 15
+    params: {cardinality: [null, 5]}
+  - {family: newsvendor, dim: 10}
+  - family: fixed_charge
+    dim: 10
+    params: {constraint_handling: [penalty, repair]}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: CMA-ES, entry: cmaes}
+  - {name: PSO, entry: pso, params: {max_iterations: null}}
+  - {name: GWO, entry: gwo}
+  - {name: ABC, entry: abc}
+  - {name: TLBO, entry: tlbo}
+  - {name: Jaya, entry: jaya}
+  - {name: Tabu, entry: tabu}
+  - name: Memetic(DE+CMA-ES)
+    entry: memetic
+    params: {global_optimiser: {entry: de}, local_optimiser: {entry: cmaes, params: {sigma0: 0.05}}}

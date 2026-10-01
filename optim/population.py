@@ -39,7 +39,7 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .base import BaseOptimiser, OptimisationResult
+from .base import BaseOptimiser, OptimisationResult, Step
 
 
 class Problem:
@@ -198,6 +198,7 @@ class PopulationOptimiser(BaseOptimiser):
         max_evaluations: Optional[int] = None,
         max_iterations: Optional[int] = None,
         callback: Optional[Callable[[int, List[float], float], Any]] = None,
+        record_trajectory: bool = False,
         **kwargs: Any,
     ) -> OptimisationResult:
         """Run the algorithm.
@@ -221,6 +222,9 @@ class PopulationOptimiser(BaseOptimiser):
         callback : callable, optional
             ``callback(iteration, best_solution, best_value)`` called after
             every iteration; return ``True`` to stop early.
+        record_trajectory : bool
+            Record a :class:`~optim.base.Step` per iteration in
+            ``result.trajectory``.  Default ``False``.
 
         Returns
         -------
@@ -262,6 +266,10 @@ class PopulationOptimiser(BaseOptimiser):
         self._initialise(problem, state, rng)
 
         history = [problem.best_f]
+        trajectory = (
+            [self._make_step(0, problem, state, None, {"type": "initialise"})]
+            if record_trajectory else None
+        )
         no_improve = 0
         while not problem.exhausted:
             if max_iter is not None and state.iteration >= max_iter:
@@ -271,9 +279,14 @@ class PopulationOptimiser(BaseOptimiser):
 
             state.progress = self._progress(state.iteration, problem, max_iter, max_evals)
             previous = problem.best_f
+            state.action = {"type": self.action_name}
             self._step(problem, state, rng)
             state.iteration += 1
             history.append(problem.best_f)
+            if trajectory is not None:
+                trajectory.append(
+                    self._make_step(state.iteration, problem, state, previous, state.action)
+                )
 
             if previous - problem.best_f > self.tol:
                 no_improve = 0
@@ -293,6 +306,41 @@ class PopulationOptimiser(BaseOptimiser):
             n_evaluations=problem.n_evaluations,
             population=state.X[order].tolist(),
             population_values=(sign * state.F[order]).tolist(),
+            trajectory=trajectory,
+        )
+
+    # ------------------------------------------------------------------
+    # State-action layer
+    # ------------------------------------------------------------------
+
+    @property
+    def action_name(self) -> str:
+        """Default ``action["type"]`` recorded for each iteration."""
+        return type(self).__name__.replace("Optimiser", "").lower()
+
+    def _state_summary(self, state: SimpleNamespace) -> dict:
+        """Algorithm-specific additions to the recorded state (override)."""
+        return {}
+
+    def _make_step(self, idx, problem, state, previous, action) -> Step:
+        finite = state.F[np.isfinite(state.F)]
+        span = np.where(problem.span > 0, problem.span, 1.0)
+        summary = {
+            "best": float(problem.best_f),
+            "mean": float(finite.mean()) if len(finite) else None,
+            "diversity": float(np.mean(np.std(state.X / span, axis=0))),
+            "evaluations": int(problem.n_evaluations),
+            "progress": float(state.progress),
+        }
+        summary.update(self._state_summary(state))
+        delta = None if previous is None else float(problem.best_f - previous)
+        return Step(
+            step_idx=idx,
+            cost=float(problem.best_f),
+            delta_cost=delta,
+            accepted=delta is not None and delta < 0,
+            action=dict(action),
+            state=summary,
         )
 
     # ------------------------------------------------------------------

@@ -1,0 +1,32 @@
+# Binary and permutation problems: native discrete optimisers versus
+# continuous optimisers through random-key decoding.
+name: combinatorial
+budget: {per_dim: 400}
+repeats: 5
+seed: 2
+n_jobs: 4
+random_keys: true
+problems:
+  - family: tsp
+    dim: [15, 30]
+    params: {layout: [uniform, clustered]}
+  - family: knapsack
+    dim: 40
+    params: {correlation: [uncorrelated, weak, strong]}
+  - {family: onemax, dim: 40}
+  - {family: trap, dim: 40}
+  - family: nk
+    dim: 16
+    params: {k: [2, 6]}
+  - {family: maxcut, dim: 16}
+optimisers:
+  - {name: GA, entry: genetic}
+  - {name: Tabu, entry: tabu}
+  - {name: ACO, entry: aco}
+  - {name: DE (random keys), entry: de}
+  - {name: CMA-ES (random keys), entry: cmaes}
+  - {name: GWO (random keys), entry: gwo}
+  - {name: TLBO (random keys), entry: tlbo}
+  - name: Island(GA+Tabu)
+    entry: island
+    params: {optimisers: [{entry: genetic}, {entry: tabu}], n_epochs: 5}

@@ -1,0 +1,20 @@
+# Tiny end-to-end check (runs in a few seconds; used by the tests and CI).
+name: smoke
+budget: {per_dim: 100}
+repeats: 2
+seed: 0
+problems:
+  - {family: sphere, dim: 4}
+  - {family: rastrigin, dim: 4, params: {rotate: true}}
+  - {family: knapsack, dim: 12}
+  - {family: tsp, dim: 8}
+  - {family: pricing, dim: 4}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: GWO, entry: gwo}
+  - {name: GA, entry: genetic}
+  - {name: Tabu, entry: tabu}
+  - {name: ACO, entry: aco}
+  - name: Adaptive(DE,CMA-ES)
+    entry: adaptive
+    params: {optimisers: [{entry: de}, {entry: cmaes}], n_rounds: 4}

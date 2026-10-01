@@ -21,7 +21,9 @@ A generalised, extensible metaheuristic optimisation library in Python.
   - [EnsembleOptimiser](#ensembleoptimiser)
 - [Metaheuristic Catalogue](#metaheuristic-catalogue)
 - [Ensemble Types](#ensemble-types)
-- [Benchmarking](#benchmarking)
+- [Problem Suite](#problem-suite)
+- [Taxonomy](#taxonomy)
+- [Benchmarking & Dashboard](#benchmarking--dashboard)
 - [OptimisationResult](#optimisationresult)
 - [Custom Operators](#custom-operators)
 - [Parameter Tuning Tips](#parameter-tuning-tips)
@@ -41,7 +43,11 @@ A generalised, extensible metaheuristic optimisation library in Python.
 | `DBMOSAOptimiser` | Dominance-Based Multi-Objective SA | continuous (multi-obj) |
 | `EnsembleOptimiser` | Combine optimisers (best / chain / restart) | any |
 
-It also includes a [catalogue of 15 more metaheuristics](#metaheuristic-catalogue):
+It also includes a [catalogue of 15 more metaheuristics](#metaheuristic-catalogue),
+a [problem suite](#problem-suite) of continuous, combinatorial and
+profit-function problems, a machine-readable [taxonomy](#taxonomy), and a
+[benchmark harness with a dashboard](#benchmarking--dashboard) — see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The catalogue:
 Differential Evolution, CMA-ES, Grey Wolf, Whale, Firefly, Cuckoo Search,
 Artificial Bee Colony, Bat, ACO_R, Harmony Search, TLBO, Jaya, Sine Cosine,
 Ant Colony (permutations) and Tabu Search. There are also
@@ -54,7 +60,8 @@ co-evolution.
 ## Installation
 
 ```bash
-pip install -e ".[dev]"   # editable install with test dependencies
+pip install -e ".[dev]"         # editable install with test dependencies
+pip install -e ".[dev,bench]"   # plus the benchmark harness (pandas, pyyaml, scipy, psutil)
 ```
 
 Requires Python ≥ 3.10 and NumPy ≥ 1.26. Tested on Python 3.10 – 3.14. No
@@ -64,7 +71,7 @@ After install, verify the package is importable:
 
 ```python
 import optim
-print(optim.__version__)      # '0.2.0'
+print(optim.__version__)      # '0.3.0'
 print(optim.__all__)          # list of public classes
 ```
 
@@ -693,36 +700,152 @@ print(coop.optimise(rastrigin, bounds).best_value)
 
 ---
 
-## Benchmarking
+## Problem Suite
 
-`optim.benchmarks` provides standard test functions (`sphere`, `rosenbrock`,
-`rastrigin`, `ackley`, `griewank`, `schwefel`, `levy`, `zakharov`,
-`styblinski_tang`), stored in the `BENCHMARKS` registry with their usual
-bounds and known optima. It also provides a harness for comparing algorithms
-and ensembles:
+`optim.problems` is a registry of benchmark problem *families* — the
+optimisation equivalent of clustbench's datasets. Every family builds
+reproducible instances from `(family, dim, instance, **params)`. Each
+instance knows its `sense` (`'min'` cost or `'max'` profit), its `encoding`,
+its optimum (when computable), its `tags`, and the median value of random
+solutions.
 
 ```python
-from optim import DifferentialEvolutionOptimiser, GreyWolfOptimiser, IslandModelOptimiser
-from optim.benchmarks import compare, format_table
+from optim import CMAESOptimiser
+from optim.problems import make_problem, PROBLEMS
 
-rows = compare(
-    {"DE": DifferentialEvolutionOptimiser(max_iterations=None),
-     "GWO": GreyWolfOptimiser(max_iterations=None),
-     "Island": IslandModelOptimiser([DifferentialEvolutionOptimiser(), GreyWolfOptimiser()],
-                                    max_evaluations=20_000)},
-    problems=["sphere", "rastrigin", "ackley"], dim=10, n_runs=5, max_evaluations=20_000,
-)
-print(format_table(rows))
+p = make_problem("pricing", dim=10, instance=2)        # a profit function
+r = CMAESOptimiser(max_evaluations=10_000, max_iterations=None).optimise(
+    p.objective, p.bounds, maximise=p.maximise)
+print(r.best_value, "vs optimum", p.optimum, sorted(p.tags))
 ```
 
-`python examples/compare_algorithms.py` runs every algorithm and ensemble
-type side by side.
+| Category | Families | Notes |
+|---|---|---|
+| **continuous** | `sphere`, `ellipsoid`, `bent_cigar`, `step`, `zakharov`, `rosenbrock`, `rastrigin`, `ackley`, `griewank`, `levy`, `styblinski_tang`, `schwefel` | Parameters `shift` (default **on**, off-centre optimum), `rotate` (non-separable), `noise` (multiplicative) |
+| **combinatorial** | `tsp` (uniform / clustered), `knapsack` (uncorrelated / weak / strong / subset-sum), `onemax`, `trap` (deceptive), `nk` (tunable ruggedness), `maxcut` | Knapsack optimum by DP; NK and max-cut exact for `dim <= 16` |
+| **profit** | see below | Constraints handled by `constraint_handling='penalty'` or `'repair'` |
 
-> **Caveat:** several newer swarm algorithms (GWO, WOA, SCA) are known to
-> be biased towards the centre of the search box. On benchmarks whose optimum
-> sits at the origin they look better than they will on real problems.
-> Judge them on your own objective, or on a shifted function such as
-> `lambda x: rastrigin([v - 1.3 for v in x])`.
+**Profit-function types**, one family each:
+
+| Family | Profit type | Optimum |
+|---|---|---|
+| `production_planning` | linear margins under shared resource limits | exact (LP) |
+| `marketing_budget` | concave, diminishing returns (`a·log(1+s·x) − x`) under a budget | exact (KKT water-filling) |
+| `pricing` | quadratic: substitute products with cross-elastic linear demand | exact (linear system) |
+| `portfolio` | risk-adjusted mean − λ·variance, optional cardinality limit | exact (QP) without cardinality |
+| `newsvendor` | stochastic: simulated sales under uncertain demand (noisy) | exact (critical fractile) |
+| `fixed_charge` | discontinuous: set-up costs plus a capacity limit | exact by enumeration (`dim <= 12`) |
+
+Discrete problems can be solved by any real-valued optimiser through
+**random keys**: `as_random_key(problem)` decodes `[0, 1]^n` by argsort
+(permutations) or by a 0.5 threshold (bits).
+
+`optbench list problems` prints every family with its parameters.
+
+---
+
+## Taxonomy
+
+`optim.taxonomy` gives every optimiser and ensemble a machine-readable
+**card**, the analogue of clustbench's `algorithm_cards.py`. The benchmark
+uses cards to decide encodings, and the dashboard uses them for grouping.
+Later, a router or algorithm mutator can reason over the same features.
+
+- **Optimisers**: `family` (evolutionary, swarm, physics, human, music,
+  mathematical, trajectory) × `search` (population, trajectory,
+  constructive), plus `encodings`, `mechanisms` and `biases`
+  (`rotation_invariant`, `centre_biased`, `separability_exploiting`,
+  `parameter_free`, `self_adaptive`, …).
+- **Ensembles**: Talbi's hybrid taxonomy, *level* (low = embedded, high =
+  self-contained) × *mode* (relay = sequential, teamwork = cooperative):
+
+| Talbi class | Ensembles |
+|---|---|
+| HTH (high-level teamwork) | `portfolio`, `multistart`, `island` |
+| HRH (high-level relay) | `relay`, `adaptive` (bandit hyper-heuristic) |
+| LRH (low-level relay) | `memetic` |
+| LTH (low-level teamwork) | `cooperative` (co-evolution) |
+
+---
+
+## Benchmarking & Dashboard
+
+`optim.bench` is a benchmark harness modelled on clustbench. It needs the
+extra dependencies: `pip install -e ".[bench]"`.
+
+```bash
+optbench list optimisers                     # what's registered
+optbench run configs/bench.demo.yaml --out runs/demo --site docs/dashboard/index.html
+optbench analyse runs/demo                   # recompute metrics without re-running
+optbench site runs/demo --out docs/dashboard/index.html
+```
+
+A config is a grid, as in clustbench. Every list is an axis of the
+Cartesian product, and ensemble members are nested specs:
+
+```yaml
+name: my-study
+budget: {per_dim: 1000}      # or {evaluations: 20000}
+repeats: 5
+random_keys: true            # real-valued optimisers may solve discrete problems
+problems:
+  - {family: rastrigin, dim: [10, 30], params: {rotate: [false, true]}}
+  - {family: knapsack, dim: 50, params: {correlation: [uncorrelated, strong]}}
+  - {family: portfolio, dim: 20, params: {cardinality: [null, 5]}}
+optimisers:
+  - {name: DE, entry: de}
+  - {name: CMA-ES, entry: cmaes}
+  - name: Island
+    entry: island
+    params: {optimisers: [{entry: de}, {entry: cmaes}], n_epochs: 10}
+```
+
+Ready-made configs are in `configs/`: `bench.smoke.yaml`,
+`bench.continuous.yaml`, `bench.combinatorial.yaml`, `bench.profit.yaml`,
+`bench.ensembles.yaml`, and `bench.demo.yaml` (the run behind the committed
+dashboard).
+
+**What you get.** A run directory with `results.csv` (one row per run),
+`curves.csv` (anytime curves), `trajectories.jsonl` (state-action steps),
+`manifest.json`, `skipped.jsonl` / `errors.jsonl`, plus `scored.csv` and
+`summary.json` after analysis.
+
+**Metrics** all derive from one **normalised gap**: 0 = optimum (or
+best-known), 1 = no better than random sampling. That puts costs and profits
+of any scale on one footing:
+
+- `score = 1 − gap`
+- `solved` (gap ≤ 1e-8)
+- evaluations to reach gap targets 1e-1 … 1e-8
+- an **anytime AUC**
+- normalised **average ranks**
+- a **Friedman test**
+- COCO-style **ECDFs**
+
+**Dashboard.** `docs/dashboard/index.html` is a single self-contained page
+with no external dependencies; open it from disk or serve it with GitHub
+Pages. It has:
+
+- a filterable leaderboard (by problem category, encoding, dimension, tag,
+  and optimiser vs ensemble);
+- a problem × optimiser precision heatmap;
+- convergence curves per instance;
+- anytime ECDFs;
+- the taxonomy cards;
+- run details.
+
+Every evaluation goes through a recorder that enforces the budget **exactly**
+for every optimiser, including those without budget control. Comparisons are
+always at equal cost. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for
+the design and how it maps onto clustbench.
+
+For quick in-memory comparisons without the harness, `optim.benchmarks`
+keeps the lightweight `compare()` / `format_table()` helpers and
+`python examples/compare_algorithms.py`.
+
+> **Caveat:** GWO, WOA and SCA are biased towards the centre of the search
+> box. This is why continuous problems default to `shift=True`: on
+> unshifted functions these algorithms look far better than they are.
 
 ---
 

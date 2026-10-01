@@ -94,6 +94,9 @@ class CMAESOptimiser(PopulationOptimiser):
         state.D = np.ones(n)
         state.generation = 0
 
+    def _state_summary(self, state):
+        return {"sigma": float(state.sigma), "axis_ratio": float(state.D.max() / state.D.min())}
+
     def _step(self, problem, state, rng):
         p = state.cma
         n = problem.dim
